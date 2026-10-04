@@ -1011,10 +1011,10 @@
 .state-dot.state-0 {
   background: #059669;
 }
-.state-dot.state-1 {
+.state-dot.state-2 {
   background: #fb923c;
 }
-.state-dot.state-2 {
+.state-dot.state-1 {
   background: #dc2626;
 }
 .notebook-grid {
@@ -1093,14 +1093,14 @@
   border-color: #047857;
   background: #059669;
 }
-.copy-button.state-1,
-.dark .copy-button.state-1 {
+.copy-button.state-2,
+.dark .copy-button.state-2 {
   color: #321900;
   border-color: #c2410c;
   background: #fb923c;
 }
-.copy-button.state-2,
-.dark .copy-button.state-2 {
+.copy-button.state-1,
+.dark .copy-button.state-1 {
   color: #fff;
   border-color: #b91c1c;
   background: #dc2626;
@@ -1636,4 +1636,42 @@
 }
 .history-actions button[aria-label="Delete match"] {
   color: hsl(var(--destructive));
+}
+
+.tracker-search {
+  padding: 16px 23px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.tracker-search > .field-label {
+  margin-bottom: 9px;
+}
+.notebook-match-panel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+.notebook-match-panel > div:first-child {
+  flex: 1;
+  min-width: 180px;
+}
+.notebook-match-panel > .combobox {
+  flex: 0 1 230px;
+}
+.notebook-match-panel > .combobox .field-label {
+  margin-bottom: 6px;
+}
+.notebook-match-feedback {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .notebook-match-panel {
+    align-items: stretch;
+  }
+  .notebook-match-panel > .combobox {
+    flex: 1 1 100%;
+  }
 }

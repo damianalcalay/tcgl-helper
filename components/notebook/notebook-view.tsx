@@ -8,23 +8,35 @@ import {
   GitBranch,
   ArrowUpRight,
   CircleCheck,
+  Plus,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { AppData, CARD_TYPES } from "@/types/domain";
+import { AppData, CARD_TYPES, Result } from "@/types/domain";
 import { deckRoster } from "@/lib/domain/logic";
 import { Button } from "@/components/ui/button";
 import { RegexCombobox } from "@/components/shared/regex-combobox";
 import { ConfirmDialog } from "@/components/shared/modal";
 import { PageHeader, EmptyState } from "@/components/shared/page-parts";
+import { MatchForm } from "@/components/stats/match-form";
+import { TrackerSearch } from "./tracker-search";
 import { DeckImageViewer } from "@/components/decks/deck-image-viewer";
 type State = 0 | 1 | 2;
-const states = ["Available", "Prizes", "Discard pile"] as const;
+const states = ["Available", "Discard pile", "Prizes"] as const;
 export function NotebookView({ data }: { data: AppData }) {
   const params = useSearchParams();
   const [deckId, setDeckId] = useState(params.get("deck") ?? "");
   const [copies, setCopies] = useState<Record<string, State>>({});
   const [reset, setReset] = useState(false);
+  const [result, setResult] = useState<Result | "">("");
+  const [matchForm, setMatchForm] = useState<{
+    deck_id: string;
+    result: Result;
+    prizes: string[];
+  } | null>(null);
+  const [matchMessage, setMatchMessage] = useState("");
+  const [matchError, setMatchError] = useState("");
+  const [visibleIds, setVisibleIds] = useState<string[] | null>(null);
   const deck = data.decks.find((d) => d.id === deckId);
   const roster = deckRoster(data, deckId);
   const total = roster.reduce((s, c) => s + c.quantity, 0);
@@ -35,6 +47,27 @@ export function NotebookView({ data }: { data: AppData }) {
   });
   function choose(id: string) {
     setDeckId(id);
+    setResult("");
+    setMatchMessage("");
+    setMatchError("");
+    setVisibleIds(null);
+  }
+  function addMatch() {
+    if (!deck || !result) return;
+    const prizes = roster.flatMap((c) =>
+      Array.from({ length: c.quantity }, (_, i) =>
+        copies[`${deckId}:${c.id}:${i}`] === 2 ? c.id : "",
+      ).filter(Boolean),
+    );
+    if (prizes.length > 6) {
+      setMatchError(
+        "More than six copies are marked as Prizes. Adjust the tracker before adding this match.",
+      );
+      return;
+    }
+    setMatchError("");
+    setMatchMessage("");
+    setMatchForm({ deck_id: deckId, result, prizes });
   }
   return (
     <>
@@ -114,6 +147,46 @@ export function NotebookView({ data }: { data: AppData }) {
               ))}
             </div>
           </div>
+          <section className="panel notebook-match-panel">
+            <div>
+              <h3>Record this game</h3>
+              <p className="field-hint">
+                Choose your result and add this match directly to Stats.
+              </p>
+            </div>
+            <RegexCombobox
+              label="Game result"
+              placeholder="Win, Draw, or Loss"
+              options={[
+                { value: "win", label: "Win" },
+                { value: "draw", label: "Draw" },
+                { value: "loss", label: "Loss" },
+              ]}
+              value={result}
+              onChange={(value) => {
+                setResult(value as Result);
+                setMatchError("");
+                setMatchMessage("");
+              }}
+            />
+            <Button disabled={!result} onClick={addMatch}>
+              <Plus />
+              Add Match
+            </Button>
+            {matchError && (
+              <p role="alert" className="error-message notebook-match-feedback">
+                {matchError}
+              </p>
+            )}
+            {matchMessage && (
+              <p role="status" className="notebook-match-feedback text-primary">
+                {matchMessage}{" "}
+                <Link href="/stats" className="underline">
+                  View Stats
+                </Link>
+              </p>
+            )}
+          </section>
           <section className="panel deck-reference-image">
             <DeckImageViewer url={deck.image_url} name={deck.name} />
           </section>
@@ -137,42 +210,57 @@ export function NotebookView({ data }: { data: AppData }) {
                   </span>
                 ))}
                 <span className="ml-auto">
-                  Available → Prizes → Discard pile
+                  Available → Discard pile → Prizes
                 </span>
               </div>
+              <TrackerSearch
+                key={deckId}
+                cards={roster}
+                onResults={setVisibleIds}
+              />
               {roster.length ? (
                 <div className="tracker-list">
-                  {roster.map((c) => (
-                    <div className="tracker-row" key={c.id}>
-                      <span className="quantity-badge">x{c.quantity}</span>
-                      <div className="tracker-card-name">
-                        <strong>{c.name}</strong>
-                        <small>{CARD_TYPES[c.type]}</small>
+                  {visibleIds !== null &&
+                    !roster.some((c) => visibleIds.includes(c.id)) && (
+                      <div className="inline-empty">
+                        No cards match your search.
                       </div>
-                      <div className="copy-controls">
-                        {Array.from({ length: c.quantity }, (_, i) => {
-                          const key = `${deckId}:${c.id}:${i}`;
-                          const state = copies[key] ?? 0;
-                          return (
-                            <button
-                              key={key}
-                              className={`copy-button state-${state}`}
-                              onClick={() =>
-                                setCopies((cs) => ({
-                                  ...cs,
-                                  [key]: ((state + 1) % 3) as State,
-                                }))
-                              }
-                              title={`${c.name} · Copy ${i + 1}: ${states[state]}. Click for ${states[(state + 1) % 3]}.`}
-                              aria-label={`${c.name} copy ${i + 1}: ${states[state]}. Change to ${states[(state + 1) % 3]}.`}
-                            >
-                              <span>{i + 1}</span>
-                            </button>
-                          );
-                        })}
+                    )}
+                  {roster
+                    .filter(
+                      (c) => visibleIds === null || visibleIds.includes(c.id),
+                    )
+                    .map((c) => (
+                      <div className="tracker-row" key={c.id}>
+                        <span className="quantity-badge">x{c.quantity}</span>
+                        <div className="tracker-card-name">
+                          <strong>{c.name}</strong>
+                          <small>{CARD_TYPES[c.type]}</small>
+                        </div>
+                        <div className="copy-controls">
+                          {Array.from({ length: c.quantity }, (_, i) => {
+                            const key = `${deckId}:${c.id}:${i}`;
+                            const state = copies[key] ?? 0;
+                            return (
+                              <button
+                                key={key}
+                                className={`copy-button state-${state}`}
+                                onClick={() =>
+                                  setCopies((cs) => ({
+                                    ...cs,
+                                    [key]: ((state + 1) % 3) as State,
+                                  }))
+                                }
+                                title={`${c.name} · Copy ${i + 1}: ${states[state]}. Click for ${states[(state + 1) % 3]}.`}
+                                aria-label={`${c.name} copy ${i + 1}: ${states[state]}. Change to ${states[(state + 1) % 3]}.`}
+                              >
+                                <span>{i + 1}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               ) : (
                 <EmptyState
@@ -183,7 +271,7 @@ export function NotebookView({ data }: { data: AppData }) {
               )}
               <div className="panel-footnote">
                 Tracking is temporary for this notebook session. Save the result
-                in Stats when your game ends.
+                using Add Match above when your game ends.
               </div>
             </section>
             <div className="notebook-reference">
@@ -244,6 +332,14 @@ export function NotebookView({ data }: { data: AppData }) {
           </div>
         </>
       )}
+      {matchForm && (
+        <MatchForm
+          data={data}
+          initialValues={matchForm}
+          onClose={() => setMatchForm(null)}
+          onSaved={() => setMatchMessage("Match saved to your statistics.")}
+        />
+      )}
       {reset && (
         <ConfirmDialog
           title="Reset this game?"
@@ -257,6 +353,9 @@ export function NotebookView({ data }: { data: AppData }) {
               ),
             );
             setReset(false);
+            setResult("");
+            setMatchError("");
+            setMatchMessage("");
           }}
         />
       )}

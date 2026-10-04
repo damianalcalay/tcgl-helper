@@ -68,7 +68,7 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await expect(
     page.getByRole("option", { name: "Test Item", exact: true }),
   ).toHaveCount(0);
-  await page.getByRole("searchbox").press("Escape");
+  await page.locator(".combo-search").getByRole("searchbox").press("Escape");
   await page.getByRole("tab", { name: /My decks/ }).click();
   await createDeck(page, "Deck Alpha", 2);
   await page.getByRole("button", { name: "Edit deck", exact: true }).click();
@@ -112,13 +112,32 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
     path: "test-results/notebook-desktop.png",
     fullPage: true,
   });
+  const search = page.getByRole("searchbox", {
+    name: "Search card names",
+    exact: true,
+  });
+  await search.fill("basic$");
+  await expect(page.locator(".tracker-row")).toHaveCount(1);
+  await expect(page.locator(".tracker-row")).toContainText("Test Basic");
+  await search.fill("[");
+  await expect(page.locator(".tracker-search [role=alert]")).toContainText(
+    "Invalid regular expression",
+  );
+  await search.fill("no-such-card");
+  await expect(
+    page.getByText("No cards match your search.", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Clear card search", exact: true })
+    .click();
+  await expect(page.locator(".tracker-row")).toHaveCount(3);
   const first = page.getByRole("button", { name: /Test Basic copy 1:/ });
   const second = page.getByRole("button", { name: /Test Basic copy 2:/ });
   await expect(first).toHaveAttribute("aria-label", /Available/);
   await first.click();
   await expect(first).toHaveAttribute(
     "aria-label",
-    /^Test Basic copy 1: Prizes/,
+    /^Test Basic copy 1: Discard pile/,
   );
   await expect(second).toHaveAttribute(
     "aria-label",
@@ -127,13 +146,13 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await first.click();
   await expect(first).toHaveAttribute(
     "aria-label",
-    /^Test Basic copy 1: Discard pile/,
+    /^Test Basic copy 1: Prizes/,
   );
   await page.getByRole("button", { name: "Reset game", exact: true }).click();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(first).toHaveAttribute(
     "aria-label",
-    /^Test Basic copy 1: Discard pile/,
+    /^Test Basic copy 1: Prizes/,
   );
   await page.getByRole("button", { name: "Reset game", exact: true }).click();
   await page
@@ -144,14 +163,25 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
     "aria-label",
     /^Test Basic copy 1: Available/,
   );
-  await page.getByRole("link", { name: "Stats", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Every game tells you something" }),
-  ).toBeVisible();
+  await first.click();
+  await first.click();
+  await second.click();
+  await second.click();
+  await choose(page, "Game result", "Win");
   await page.getByRole("button", { name: "Add Match", exact: true }).click();
-  await choose(page, "Your deck", "Deck Alpha");
+  await expect(
+    page.getByRole("combobox", { name: "Your deck", exact: true }),
+  ).toContainText("Deck Alpha");
+  await expect(
+    page.getByRole("combobox", { name: "Result", exact: true }),
+  ).toContainText("Win");
+  await expect(
+    page.getByRole("combobox", { name: "Prize 1", exact: true }),
+  ).toContainText("Test Basic");
+  await expect(
+    page.getByRole("combobox", { name: "Prize 2", exact: true }),
+  ).toContainText("Test Basic");
   await choose(page, "Opponent deck", "Deck Beta");
-  await choose(page, "Result", "Win");
   await choose(page, "Your prizes taken", "6");
   await choose(page, "Opponent prizes taken", "3");
   await page
@@ -172,10 +202,18 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
       exact: true,
     }),
   ).toBeDisabled();
-  await page.getByRole("searchbox").press("Escape");
+  await page.locator(".combo-search").getByRole("searchbox").press("Escape");
   for (let i = 3; i <= 6; i++) await choose(page, `Prize ${i}`, "Test Item");
   await page.getByRole("button", { name: "Save match", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText(
+    "Match saved to your statistics.",
+  );
+  await expect(first).toHaveAttribute(
+    "aria-label",
+    /^Test Basic copy 1: Prizes/,
+  );
+  await page.getByRole("link", { name: "Stats", exact: true }).click();
   await expect(page.getByText("100.0%", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Details", exact: true }).click();
   await expect(

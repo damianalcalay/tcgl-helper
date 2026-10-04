@@ -48,7 +48,7 @@ Without environment variables the workspace displays setup instructions instead 
 ## Features
 
 - **Decks**: create/edit/delete decks and cards, manage grouped quantities, protect the 60-card total and four-copy cap, write playstyle/notes, link existing decks as variants, upload and inspect full-resolution images with zoom.
-- **Notebook**: select any deck, read its reference information, cycle each numbered copy through Available (green), Prizes (orange), Discard pile (red), and confirm a reset. Each deck retains its temporary tracking while switching within the page. Reloading or leaving the page clears it.
+- **Notebook**: select any deck, read its reference information, cycle each numbered copy through Available (green), Discard pile (red), Prizes (orange), and confirm a reset. Each deck retains its temporary tracking while switching within the page. Reloading or leaving the page clears it.
 - **Stats**: record/edit/delete matches, select Basic starters from the appropriate rosters, record 0–6 prizes taken per side, and select up to six opening prize copies. Unknown prize cards can remain unrecorded. Prize outcomes do not force a win/loss: concessions and other game endings need not take all six prizes.
 - Overview metrics, per-deck wins/losses/draws, overall and last-20 win rates, best/worst three matchups with sample sizes, and independently expandable histories. Histories are sorted newest first and paginate 10/25/50/100/All.
 - Searchable selectors use case-insensitive JavaScript regex. Invalid expressions display feedback. Searches run in an isolated Web Worker with a timeout, so a pathological pattern does not block the interface.
@@ -115,3 +115,5 @@ The initial dependency audit reports a transitive `braces` advisory through Tail
 For an existing database, run `supabase/migrations/20261004_deck_import_energy.sql` in the Supabase SQL Editor before using this update. New installations use the updated bootstrap schema.
 
 Open Create/Edit deck > Import deck from text, paste a Pokémon TCG Live list, and import. The list replaces the draft roster. Expansion codes and collector numbers are removed; different printings of the same name are combined. Existing library cards are reused by name. Choose the exact type for each missing Pokémon or Trainer card; Energy is selected automatically. New cards and the deck are saved in one transaction when you save the deck. Energy supports up to 60 copies within the 60-card total.
+
+Notebook includes a regex card-name filter and an Add Match action with Win/Draw/Loss selection. The match form starts with the active deck, selected result, and copies marked as Prizes. Complete the opponent, starters and prize outcome to save directly to Stats; tracking is preserved after saving.

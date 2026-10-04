@@ -18,14 +18,22 @@ export function MatchForm({
   data,
   match,
   onClose,
+  initialValues,
+  onSaved,
 }: {
   data: AppData;
   match?: Match;
   onClose: () => void;
+  initialValues?: { deck_id: string; result: Result; prizes: string[] };
+  onSaved?: () => void;
 }) {
-  const [deckId, setDeckId] = useState(match?.deck_id ?? "");
+  const [deckId, setDeckId] = useState(
+    match?.deck_id ?? initialValues?.deck_id ?? "",
+  );
   const [opponentId, setOpponentId] = useState(match?.opponent_deck_id ?? "");
-  const [result, setResult] = useState<string>(match?.result ?? "");
+  const [result, setResult] = useState<string>(
+    match?.result ?? initialValues?.result ?? "",
+  );
   const [myPrizes, setMyPrizes] = useState(match?.my_prizes ?? 0);
   const [theirPrizes, setTheirPrizes] = useState(match?.opponent_prizes ?? 0);
   const [starter, setStarter] = useState(match?.starter_id ?? "");
@@ -39,7 +47,7 @@ export function MatchForm({
           .filter((p) => p.match_id === match.id)
           .sort((a, b) => a.slot - b.slot)
           .map((p) => p.card_id)
-      : [];
+      : (initialValues?.prizes ?? []);
     return [...initial, ...Array(6 - initial.length).fill("")];
   });
   const mutation = useMutation();
@@ -89,7 +97,10 @@ export function MatchForm({
           notes,
           prizes: selected,
         }),
-      onClose,
+      () => {
+        onSaved?.();
+        onClose();
+      },
     );
   }
   const deckOptions = data.decks.map((d) => ({ value: d.id, label: d.name }));
