@@ -10,15 +10,10 @@ import {
 import { matchRoster } from "@/lib/domain/logic";
 import { saveMatch } from "@/app/actions";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Modal, ErrorMessage } from "@/components/shared/modal";
 import { RegexCombobox } from "@/components/shared/regex-combobox";
 import { useMutation } from "@/components/shared/use-mutation";
 import { X, Loader2 } from "lucide-react";
-function localDate(value?: string) {
-  const d = value ? new Date(value) : new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
 export function MatchForm({
   data,
   match,
@@ -37,7 +32,6 @@ export function MatchForm({
   const [theirStarter, setTheirStarter] = useState(
     match?.opponent_starter_id ?? "",
   );
-  const [date, setDate] = useState(localDate(match?.played_at));
   const [notes, setNotes] = useState(match?.notes ?? "");
   const [prizes, setPrizes] = useState<string[]>(() => {
     const initial = match
@@ -80,8 +74,6 @@ export function MatchForm({
       return mutation.setError(
         "Prize cards must respect the copies in your deck.",
       );
-    if (!date || !Number.isFinite(new Date(date).getTime()))
-      return mutation.setError("Enter a valid match date and time.");
     mutation.run(
       () =>
         saveMatch({
@@ -93,7 +85,7 @@ export function MatchForm({
           opponent_prizes: theirPrizes,
           starter_id: starter,
           opponent_starter_id: theirStarter,
-          played_at: new Date(date).toISOString(),
+          played_at: match?.played_at ?? new Date().toISOString(),
           notes,
           prizes: selected,
         }),
@@ -158,18 +150,6 @@ export function MatchForm({
               value={result}
               onChange={setResult}
             />
-            <label className="field-label">
-              Played at{" "}
-              <span className="font-normal text-muted-foreground">
-                Your local time
-              </span>
-              <Input
-                type="datetime-local"
-                required
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </label>
           </div>
           <div className="form-grid">
             <RegexCombobox
@@ -276,8 +256,7 @@ export function MatchForm({
             </div>
           </div>
           <label className="field-label">
-            Match notes{" "}
-            <span className="font-normal text-muted-foreground">Optional</span>
+            Match notes
             <textarea
               maxLength={50000}
               rows={3}
