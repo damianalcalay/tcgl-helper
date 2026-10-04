@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+
 async function choose(page: Page, label: string, option: string) {
   await page.getByRole("combobox", { name: label, exact: true }).click();
   await page
@@ -322,18 +323,12 @@ test("histories expand independently and paginate the newest games; card edits a
     .click();
   await expect(page.getByText("Edited card", { exact: true })).toHaveCount(0);
   await page.getByRole("link", { name: "Stats", exact: true }).click();
-  const alphaRow = page
-    .locator(".stats-table > tbody > tr")
-    .filter({
-      has: page
-        .locator(".table-deck-name")
-        .filter({ hasText: "History Alpha" }),
-    });
-  const betaRow = page
-    .locator(".stats-table > tbody > tr")
-    .filter({
-      has: page.locator(".table-deck-name").filter({ hasText: "History Beta" }),
-    });
+  const alphaRow = page.locator(".stats-table > tbody > tr").filter({
+    has: page.locator(".table-deck-name").filter({ hasText: "History Alpha" }),
+  });
+  const betaRow = page.locator(".stats-table > tbody > tr").filter({
+    has: page.locator(".table-deck-name").filter({ hasText: "History Beta" }),
+  });
   await expect(alphaRow).toContainText("80.0%");
   await expect(alphaRow).toContainText("100.0%");
   await alphaRow.getByRole("button", { name: "Details", exact: true }).click();
@@ -364,4 +359,58 @@ test("histories expand independently and paginate the newest games; card edits a
     path: "test-results/stats-expanded-desktop.png",
     fullPage: true,
   });
+});
+
+test("imports a deck, creates missing cards and saves thirteen Energy copies", async ({
+  page,
+}) => {
+  await page.goto("/auth/login");
+  await page.getByLabel("Email", { exact: true }).fill("fixture@example.test");
+  await page.getByLabel("Password", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Login", exact: true }).click();
+  await expect(page).toHaveURL(/\/decks$/);
+  await page.getByRole("button", { name: "Create deck", exact: true }).click();
+  await page.getByLabel("Deck name", { exact: true }).fill("Imported deck");
+  await page.getByText("Import deck from text", { exact: true }).click();
+  await page
+    .getByLabel("Paste your Pokémon TCG Live deck list")
+    .fill(
+      "Pokémon: 4\n4 Imported Ogerpon ex TWM 25\nTrainer: 4\n4 Imported Ultra Ball MEG 131\nEnergy: 13\n13 Imported Grass Energy MEE 9",
+    );
+  await page
+    .getByRole("button", { name: "Import deck list", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog").getByText("21 / 60 cards", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Create deck", exact: true })
+    .last()
+    .click();
+  await expect(page.locator('p[role="alert"]')).toContainText("Choose a type");
+  await page
+    .getByLabel("Type for Imported Ogerpon ex")
+    .selectOption("basic_ex");
+  await page.getByLabel("Type for Imported Ultra Ball").selectOption("item");
+  await expect(page.getByLabel("Type for Imported Grass Energy")).toHaveValue(
+    "energy",
+  );
+  await page
+    .getByRole("button", { name: "Create deck", exact: true })
+    .last()
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit deck", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByText("21 / 60 cards", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("dialog").getByText("x13", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Delete Imported deck", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });

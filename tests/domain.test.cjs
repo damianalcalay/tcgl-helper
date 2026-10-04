@@ -135,7 +135,7 @@ test("valid regex and invalid regex return predictable feedback", () => {
   }
   assert.equal(regexFilter(rows, "basic|item", (x) => x).items.length, 2);
   assert.match(regexFilter(rows, "[", (x) => x).error, /Invalid/);
-  assert.equal(Object.keys(domain.CARD_TYPES).length, 14);
+  assert.equal(Object.keys(domain.CARD_TYPES).length, 15);
 });
 
 test("history sorts actual instants correctly across UTC offsets", () => {
@@ -197,4 +197,35 @@ test("RESTRICT deletion and missing-record errors become friendly messages", asy
   assert.equal(result.success, false);
   assert.match(result.error, /used by a deck or match/);
   assert.doesNotMatch(result.error, /constraint/);
+});
+
+const { parseDeckList } = load("lib/domain/deck-import.ts");
+test("deck import parses accents, apostrophes, duplicate printings and Energy quantities", () => {
+  const rows = parseDeckList(
+    "Pokémon: 4\r\n2 Ogerpon ex TWM 25\r\n2 Ogerpon ex TWM 99\r\n\r\nTrainer: 4\r\n4 Lillie's Determination MEG 119\r\nEnergy: 13\r\n13 Grass Energy MEE 9",
+  );
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].quantity, 4);
+  assert.equal(rows[1].name, "Lillie's Determination");
+  assert.equal(rows[2].category, "energy");
+  assert.equal(rows[2].quantity, 13);
+  assert.equal(
+    validateQuantities([{ card_id: "energy", quantity: 13 }], ["energy"]),
+    null,
+  );
+  assert.match(
+    validateQuantities([{ card_id: "trainer", quantity: 13 }], ["energy"]),
+    /1-4/,
+  );
+});
+test("deck import rejects invalid lines, missing categories, non-Energy excess and decks over 60", () => {
+  for (const list of [
+    "",
+    "4 Card TWM 1",
+    "Pokémon: 1\nwrong",
+    "Trainer: 5\n5 Item TWM 1",
+    "Energy: 61\n61 Grass Energy MEE 9",
+    "Pokémon: 1\n0 Card TWM 1",
+  ])
+    assert.throws(() => parseDeckList(list));
 });

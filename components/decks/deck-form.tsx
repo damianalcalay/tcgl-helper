@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Plus, Trash2, Upload, X, Loader2 } from "lucide-react";
 import { AppData, CARD_TYPES, Deck, DeckInput } from "@/types/domain";
 import { deckRoster, validateQuantities } from "@/lib/domain/logic";
+import { parseDeckList } from "@/lib/domain/deck-import";
 import { saveDeck } from "@/app/actions";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,39 @@ export function DeckForm({
       .filter((v) => v.deck_id === deck?.id)
       .map((v) => v.variant_id),
   );
+  const [importText, setImportText] = useState("");
+  const [draftCards, setDraftCards] = useState<
+    { id: string; name: string; type: string }[]
+  >([]);
+  const library = [...data.cards, ...draftCards];
+  const energyIds = library.filter((c) => c.type === "energy").map((c) => c.id);
+  function importList() {
+    try {
+      const parsed = parseDeckList(importText);
+      const drafts: typeof draftCards = [];
+      const next = parsed.map((entry) => {
+        const existing = library.find(
+          (c) =>
+            c.name.trim().toLocaleLowerCase() ===
+            entry.name.toLocaleLowerCase(),
+        );
+        const card = existing ?? {
+          id: crypto.randomUUID(),
+          name: entry.name,
+          type: entry.category === "energy" ? "energy" : "",
+        };
+        if (!data.cards.some((c) => c.id === card.id)) drafts.push(card);
+        return { card_id: card.id, quantity: entry.quantity };
+      });
+      setDraftCards(drafts);
+      setCards(next);
+      mutation.setError("");
+    } catch (error) {
+      mutation.setError(
+        error instanceof Error ? error.message : "Unable to import deck list.",
+      );
+    }
+  }
   const [selected, setSelected] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [file, setFile] = useState<File | null>(null);
@@ -53,7 +87,7 @@ export function DeckForm({
             : c,
         )
       : [...cards, { card_id: selected, quantity }];
-    const error = validateQuantities(next);
+    const error = validateQuantities(next, energyIds);
     if (error) return mutation.setError(error);
     setCards(next);
     setSelected("");
@@ -62,7 +96,14 @@ export function DeckForm({
   }
   async function submit() {
     if (!name.trim()) return mutation.setError("Enter a deck name.");
-    const validation = validateQuantities(cards);
+    const usedDrafts = draftCards.filter((c) =>
+      cards.some((row) => row.card_id === c.id),
+    );
+    if (usedDrafts.some((c) => !c.type))
+      return mutation.setError(
+        "Choose a type for each new card before saving.",
+      );
+    const validation = validateQuantities(cards, energyIds);
     if (validation) return mutation.setError(validation);
     await mutation.run(
       async () => {
@@ -104,6 +145,10 @@ export function DeckForm({
           image_path: imagePath,
           cards,
           variants,
+          new_cards: usedDrafts.map((c) => ({
+            ...c,
+            type: c.type as keyof typeof CARD_TYPES,
+          })),
         });
         if (!result.success && uploaded)
           await createClient().storage.from("deck-images").remove([uploaded]);
@@ -152,22 +197,50 @@ export function DeckForm({
               {total} / 60 cards
             </span>
           </div>
+          <details className="form-stack">
+            <summary>Import deck from text</summary>
+            <label className="field-label">
+              Paste your Pokémon TCG Live deck list
+              <textarea
+                rows={8}
+                maxLength={50000}
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder={
+                  "Pokémon: 4\n4 Teal Mask Ogerpon ex TWM 25\n\nEnergy: 13\n13 Grass Energy MEE 9"
+                }
+              />
+            </label>
+            <p className="text-sm text-muted-foreground">
+              Import replaces the current list. Existing cards are reused by
+              name; missing cards are created when you save. Choose their exact
+              types below.
+            </p>
+            <Button type="button" onClick={importList}>
+              Import deck list
+            </Button>
+          </details>
           <div className="add-card-row">
             <RegexCombobox
               label="Card"
               placeholder="Select an existing card"
-              options={data.cards.map((c) => ({
-                value: c.id,
-                label: c.name,
-                description: CARD_TYPES[c.type],
-              }))}
+              options={library
+                .filter((c) => c.type)
+                .map((c) => ({
+                  value: c.id,
+                  label: c.name,
+                  description: CARD_TYPES[c.type as keyof typeof CARD_TYPES],
+                }))}
               value={selected}
               onChange={setSelected}
               disabled={total >= 60}
             />
             <RegexCombobox
               label="Copies to add"
-              options={[1, 2, 3, 4].map((n) => ({
+              options={Array.from(
+                { length: energyIds.includes(selected) ? 60 : 4 },
+                (_, i) => i + 1,
+              ).map((n) => ({
                 value: String(n),
                 label: `${n}`,
               }))}
@@ -197,11 +270,36 @@ export function DeckForm({
           <div className="editor-card-list">
             {cards.length ? (
               cards.map((c) => {
-                const card = data.cards.find((x) => x.id === c.card_id);
+                const card = library.find((x) => x.id === c.card_id);
                 return (
                   <div className="editor-card" key={c.card_id}>
                     <span className="quantity-badge">x{c.quantity}</span>
                     <span className="flex-1">{card?.name}</span>
+                    {draftCards.some((d) => d.id === c.card_id) && (
+                      <label className="field-label">
+                        New card type
+                        <select
+                          aria-label={"Type for " + card?.name}
+                          value={card?.type ?? ""}
+                          onChange={(e) =>
+                            setDraftCards((ds) =>
+                              ds.map((d) =>
+                                d.id === c.card_id
+                                  ? { ...d, type: e.target.value }
+                                  : d,
+                              ),
+                            )
+                          }
+                        >
+                          <option value="">Choose type</option>
+                          {Object.entries(CARD_TYPES).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     <div className="quantity-controls">
                       <button
                         type="button"
@@ -224,7 +322,10 @@ export function DeckForm({
                       <button
                         type="button"
                         aria-label={`Add one ${card?.name}`}
-                        disabled={c.quantity >= 4 || total >= 60}
+                        disabled={
+                          c.quantity >= (card?.type === "energy" ? 60 : 4) ||
+                          total >= 60
+                        }
                         onClick={() =>
                           setCards((cs) =>
                             cs.map((x) =>

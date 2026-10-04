@@ -109,3 +109,9 @@ npm run test:e2e
 The browser suite starts Next.js on port 3100 and an isolated Supabase protocol fixture backed by PGlite on port 54329. Both ports must be free. The fixture is explicitly test-only, uses a disposable in-memory database, and never connects to your Supabase project. It verifies CRUD forms, regex feedback, Storage/image dialogs, copy tracking and resets, match validation, statistics, independently expanded histories, pagination, themes and a mobile viewport. It does not replace the real Supabase integration in the app. Screenshots and failure traces are written to ignored `test-results/`. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` if your Chromium executable is installed elsewhere.
 
 The initial dependency audit reports a transitive `braces` advisory through Tailwind 3's tooling (and ESLint tooling); its published latest version is still affected. These are build/development dependencies, not an application endpoint accepting glob patterns. Avoid applying `npm audit fix --force`, which proposes incompatible major-version changes; revisit the upstream patch when available.
+
+## Import deck lists and Energy
+
+For an existing database, run `supabase/migrations/20261004_deck_import_energy.sql` in the Supabase SQL Editor before using this update. New installations use the updated bootstrap schema.
+
+Open Create/Edit deck > Import deck from text, paste a Pokémon TCG Live list, and import. The list replaces the draft roster. Expansion codes and collector numbers are removed; different printings of the same name are combined. Existing library cards are reused by name. Choose the exact type for each missing Pokémon or Trainer card; Energy is selected automatically. New cards and the deck are saved in one transaction when you save the deck. Energy supports up to 60 copies within the 60-card total.

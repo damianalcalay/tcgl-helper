@@ -13,6 +13,7 @@ export const CARD_TYPES = {
   tool: "Pokémon Tool",
   item: "Item",
   ace_spec: "ACE SPEC",
+  energy: "Energy",
 } as const;
 export type CardType = keyof typeof CARD_TYPES;
 export const BASIC_TYPES: CardType[] = ["basic", "basic_ex", "mega_basic_ex"];
@@ -89,6 +90,7 @@ export interface DeckInput {
   image_path: string | null;
   cards: { card_id: string; quantity: number }[];
   variants: string[];
+  new_cards?: { id: string; name: string; type: CardType }[];
 }
 export interface MatchInput {
   id?: string;

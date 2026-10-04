@@ -1,6 +1,6 @@
 -- TCGL Helper: run once in the SQL Editor of a clean Supabase project.
 begin;
-create type public.card_type as enum ('basic','basic_ex','mega_basic_ex','stage_1','stage_1_ex','mega_stage_1_ex','stage_2','stage_2_ex','mega_stage_2_ex','supporter','stadium','tool','item','ace_spec');
+create type public.card_type as enum ('basic','basic_ex','mega_basic_ex','stage_1','stage_1_ex','mega_stage_1_ex','stage_2','stage_2_ex','mega_stage_2_ex','supporter','stadium','tool','item','ace_spec','energy');
 create type public.match_result as enum ('win','loss','draw');
 create table public.cards (
  id uuid primary key default gen_random_uuid(), user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
@@ -13,7 +13,7 @@ create table public.decks (
  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), unique(id,user_id)
 );
 create table public.deck_cards (
- deck_id uuid not null, card_id uuid not null, user_id uuid not null default auth.uid(), quantity smallint not null check(quantity between 1 and 4),
+ deck_id uuid not null, card_id uuid not null, user_id uuid not null default auth.uid(), quantity smallint not null check(quantity between 1 and 60),
  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), primary key(deck_id,card_id),
  foreign key(deck_id,user_id) references public.decks(id,user_id) on delete cascade,
  foreign key(card_id,user_id) references public.cards(id,user_id) on delete restrict
@@ -36,11 +36,19 @@ create table public.matches (
 );
 create table public.match_rosters (
  match_id uuid not null, user_id uuid not null, side text not null check(side in ('mine','opponent')), card_id uuid not null,
- card_name text not null, card_type public.card_type not null, quantity smallint not null check(quantity between 1 and 4),
+ card_name text not null, card_type public.card_type not null, quantity smallint not null check(quantity between 1 and 60),
  created_at timestamptz not null default now(), primary key(match_id,side,card_id),
  foreign key(match_id,user_id) references public.matches(id,user_id) on delete cascade,
  foreign key(card_id,user_id) references public.cards(id,user_id) on delete restrict
 );
+create function public.check_card_copy_limit() returns trigger language plpgsql set search_path='' as $$
+begin
+ if new.type<>'energy' and exists(select 1 from public.deck_cards where card_id=new.id and quantity>4) then
+ raise check_violation using message='Reduce deck quantities before changing this Energy card type.';
+ end if;
+ return new;
+end $$;
+create trigger card_copy_limit before update of type on public.cards for each row execute function public.check_card_copy_limit();
 -- Each row represents one actual prize copy, not a lossy text list.
 create table public.match_prizes (
  match_id uuid not null, user_id uuid not null, slot smallint not null check(slot between 1 and 6), card_id uuid not null,
@@ -72,6 +80,9 @@ create trigger deck_cards_touch before update on public.deck_cards for each row 
 create function public.check_deck_limit() returns trigger language plpgsql set search_path='' as $$
 declare total integer;
 begin
+ if new.quantity>4 and not exists(select 1 from public.cards where id=new.card_id and type='energy') then
+ raise check_violation using message='Use 1-4 copies per non-Energy card.';
+ end if;
  perform 1 from public.decks where id=new.deck_id for update;
  select coalesce(sum(quantity),0) into total from public.deck_cards where deck_id=new.deck_id and card_id<>new.card_id;
  if total+new.quantity>60 then raise exception 'A deck cannot contain more than 60 cards.'; end if;
@@ -89,7 +100,7 @@ end $$;
 grant insert, update, delete on public.cards to authenticated;
 -- Atomic writes are the only write interface for decks/matches. No partial saves.
 create function public.save_deck(payload jsonb) returns uuid language plpgsql security definer set search_path='' as $$
-declare uid uuid:=auth.uid(); did uuid; entry jsonb; vid text; total integer:=0;
+declare uid uuid:=auth.uid(); did uuid; entry jsonb; vid text; total integer:=0; cid uuid; resolved uuid; card_map jsonb:='{}';
 begin
  if uid is null then raise exception 'Sign in to continue.'; end if;
  perform pg_advisory_xact_lock(hashtextextended(uid::text,0));
@@ -100,11 +111,21 @@ begin
  if payload->>'image_path' is not null and payload->>'image_path' not like uid::text||'/%' then raise exception 'Invalid image path.'; end if;
  insert into public.decks(id,user_id,name,playstyle,notes,image_path) values(did,uid,trim(payload->>'name'),coalesce(payload->>'playstyle',''),coalesce(payload->>'notes',''),payload->>'image_path')
  on conflict(id) do update set name=excluded.name,playstyle=excluded.playstyle,notes=excluded.notes,image_path=excluded.image_path;
+ for entry in select value from jsonb_array_elements(coalesce(payload->'new_cards','[]')) loop
+ cid:=(entry->>'id')::uuid;
+ if not exists(select 1 from jsonb_array_elements(coalesce(payload->'cards','[]')) x where x->>'card_id'=cid::text) then raise exception 'New cards must belong to the deck.'; end if;
+ select id into resolved from public.cards where user_id=uid and lower(trim(name))=lower(trim(entry->>'name')) order by created_at,id limit 1;
+ if resolved is null then
+ insert into public.cards(id,user_id,name,type) values(cid,uid,trim(entry->>'name'),(entry->>'type')::public.card_type) returning id into resolved;
+ end if;
+ card_map:=card_map||jsonb_build_object(cid::text,resolved::text);
+ end loop;
  delete from public.deck_cards where deck_id=did;
  for entry in select value from jsonb_array_elements(coalesce(payload->'cards','[]')) loop
- if not exists(select 1 from public.cards where id=(entry->>'card_id')::uuid and user_id=uid) then raise exception 'Card not found.'; end if;
+ cid:=coalesce(card_map->>(entry->>'card_id'),entry->>'card_id')::uuid;
+ if not exists(select 1 from public.cards where id=cid and user_id=uid) then raise exception 'Card not found.'; end if;
  total:=total+(entry->>'quantity')::integer;
- insert into public.deck_cards(deck_id,card_id,user_id,quantity) values(did,(entry->>'card_id')::uuid,uid,(entry->>'quantity')::smallint);
+ insert into public.deck_cards(deck_id,card_id,user_id,quantity) values(did,cid,uid,(entry->>'quantity')::smallint);
  end loop;
  if total>60 then raise exception 'A deck cannot contain more than 60 cards.'; end if;
  delete from public.deck_variants where deck_id=did;

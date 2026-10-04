@@ -105,12 +105,26 @@ export async function saveDeck(input: DeckInput): Promise<ActionResult> {
     (input.id && !id(input.id)) ||
     !Array.isArray(input.cards) ||
     !Array.isArray(input.variants) ||
+    (input.new_cards !== undefined &&
+      (!Array.isArray(input.new_cards) ||
+        input.new_cards.length > 60 ||
+        input.new_cards.some(
+          (c) =>
+            !c ||
+            !id(c.id) ||
+            !name(c.name) ||
+            !Object.hasOwn(CARD_TYPES, c.type),
+        ))) ||
     input.cards.some((c) => !c || !id(c.card_id)) ||
     input.variants.some((v) => !id(v)) ||
     (input.image_path !== null && typeof input.image_path !== "string")
   )
     return { success: false, error: "Check the deck name and selected cards." };
-  const error = validateQuantities(input.cards);
+  // Persisted types and per-card limits are validated by the atomic RPC.
+  const error = validateQuantities(
+    input.cards,
+    input.cards.map((c) => c.card_id),
+  );
   if (error) return { success: false, error };
   if (
     new Set(input.variants).size !== input.variants.length ||

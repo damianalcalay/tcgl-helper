@@ -78,15 +78,19 @@ export function summarize(matches: Match[]) {
 }
 export function validateQuantities(
   cards: { card_id: string; quantity: number }[],
+  energyIds: string[] = [],
 ): string | null {
   if (new Set(cards.map((c) => c.card_id)).size !== cards.length)
     return "Each card must appear only once.";
   if (
     cards.some(
-      (c) => !Number.isInteger(c.quantity) || c.quantity < 1 || c.quantity > 4,
+      (c) =>
+        !Number.isInteger(c.quantity) ||
+        c.quantity < 1 ||
+        c.quantity > (energyIds.includes(c.card_id) ? 60 : 4),
     )
   )
-    return "Use 1-4 copies per card.";
+    return "Use 1-4 copies per card (up to 60 for Energy).";
   if (cards.reduce((s, c) => s + c.quantity, 0) > 60)
     return "A deck cannot contain more than 60 cards.";
   return null;
