@@ -74,9 +74,23 @@ export function DeckForm({
   const [selected, setSelected] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [file, setFile] = useState<File | null>(null);
+  const [draggingImage, setDraggingImage] = useState(false);
   const [removeImage, setRemoveImage] = useState(false);
   const mutation = useMutation();
   const total = cards.reduce((s, c) => s + c.quantity, 0);
+  function selectImage(image: File) {
+    if (mutation.pending) return;
+    if (
+      image.size > 20 * 1024 * 1024 ||
+      !["image/png", "image/jpeg", "image/webp"].includes(image.type)
+    ) {
+      mutation.setError("Choose a PNG, JPEG, or WebP image up to 20 MB.");
+      return;
+    }
+    setFile(image);
+    setRemoveImage(false);
+    mutation.setError("");
+  }
   function addCard() {
     if (!selected) return mutation.setError("Select a card first.");
     const existing = cards.find((c) => c.card_id === selected);
@@ -167,6 +181,7 @@ export function DeckForm({
   return (
     <Modal
       wide
+      closeOnBackdrop={false}
       title={deck ? "Edit deck" : "Create a deck"}
       description="Build your reference list, add a playstyle, and keep your notes together."
       onClose={onClose}
@@ -411,27 +426,36 @@ export function DeckForm({
             <span className="font-normal text-muted-foreground">
               PNG, JPEG or WebP · up to 20 MB
             </span>
-            <div className="upload-zone">
+            <div
+              className={`upload-zone ${draggingImage ? "upload-zone-active" : ""}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!mutation.pending) setDraggingImage(true);
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+                  setDraggingImage(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDraggingImage(false);
+                if (e.dataTransfer.files.length !== 1) {
+                  mutation.setError("Drop one deck image at a time.");
+                  return;
+                }
+                selectImage(e.dataTransfer.files[0]);
+              }}
+            >
               <Upload size={22} />
+              <span>Drag and drop an image here, or choose a file.</span>
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (!f) return;
-                  if (
-                    f.size > 20 * 1024 * 1024 ||
-                    !["image/png", "image/jpeg", "image/webp"].includes(f.type)
-                  ) {
-                    e.target.value = "";
-                    mutation.setError(
-                      "Choose a PNG, JPEG, or WebP image up to 20 MB.",
-                    );
-                    return;
-                  }
-                  setFile(f);
-                  setRemoveImage(false);
-                  mutation.setError("");
+                  selectImage(f);
+                  e.target.value = "";
                 }}
               />
               <span>

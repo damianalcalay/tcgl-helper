@@ -60,7 +60,7 @@ export function MatchHistory({
               <th>Starters</th>
               <th>Opening prize cards</th>
               <th>Notes</th>
-              <th>Actions</th>
+              <th className="history-actions">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -121,23 +121,25 @@ export function MatchHistory({
                     </div>
                   </td>
                   <td className="match-notes">{m.notes || "—"}</td>
-                  <td>
-                    <div className="flex gap-1">
+                  <td className="history-actions">
+                    <div className="flex flex-col gap-1">
                       <Button
-                        size="icon"
-                        variant="ghost"
+                        size="sm"
+                        variant="outline"
                         aria-label="Edit match"
                         onClick={() => onEdit(m)}
                       >
                         <Pencil />
+                        Edit
                       </Button>
                       <Button
-                        size="icon"
-                        variant="ghost"
+                        size="sm"
+                        variant="outline"
                         aria-label="Delete match"
                         onClick={() => onDelete(m)}
                       >
                         <Trash2 />
+                        Delete
                       </Button>
                     </div>
                   </td>

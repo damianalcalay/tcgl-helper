@@ -9,6 +9,7 @@ export function Modal({
   onClose,
   wide = false,
   busy = false,
+  closeOnBackdrop = true,
 }: {
   title: string;
   description?: string;
@@ -16,6 +17,7 @@ export function Modal({
   onClose: () => void;
   wide?: boolean;
   busy?: boolean;
+  closeOnBackdrop?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -32,7 +34,7 @@ export function Modal({
         if (!busy) onClose();
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget && !busy) onClose();
+        if (e.target === e.currentTarget && !busy && closeOnBackdrop) onClose();
       }}
       aria-label={title}
     >

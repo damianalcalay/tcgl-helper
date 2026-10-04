@@ -1009,13 +1009,13 @@
   flex-shrink: 0;
 }
 .state-dot.state-0 {
-  background: #25a878;
+  background: #059669;
 }
 .state-dot.state-1 {
-  background: #e29a25;
+  background: #fb923c;
 }
 .state-dot.state-2 {
-  background: #df5861;
+  background: #dc2626;
 }
 .notebook-grid {
   display: grid;
@@ -1087,35 +1087,23 @@
   font-weight: 600;
   border: 1px solid;
 }
-.copy-button.state-0 {
-  color: #168059;
-  border-color: #9bdac4;
-  background: #e6f5ee;
-}
-.copy-button.state-1 {
-  color: #9c6105;
-  border-color: #eac482;
-  background: #fff2da;
-}
-.copy-button.state-2 {
-  color: #ba333f;
-  border-color: #e8a1a7;
-  background: #fde9ec;
-}
+.copy-button.state-0,
 .dark .copy-button.state-0 {
-  background: #19392d;
-  border-color: #32684e;
-  color: #79d9aa;
+  color: #fff;
+  border-color: #047857;
+  background: #059669;
 }
+.copy-button.state-1,
 .dark .copy-button.state-1 {
-  background: #40321c;
-  border-color: #735526;
-  color: #ecc572;
+  color: #321900;
+  border-color: #c2410c;
+  background: #fb923c;
 }
+.copy-button.state-2,
 .dark .copy-button.state-2 {
-  background: #401f28;
-  border-color: #723d49;
-  color: #f49da8;
+  color: #fff;
+  border-color: #b91c1c;
+  background: #dc2626;
 }
 .copy-button:hover {
   filter: brightness(0.95);
@@ -1560,4 +1548,92 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Full-width deck references and compact, responsive card lists. */
+.deck-reference-image {
+  margin-bottom: 24px;
+}
+.panel.deck-reference-image {
+  padding: 20px;
+}
+.deck-reference-image .deck-image img {
+  display: block;
+  max-height: none;
+}
+.deck-detail .detail-grid,
+.notebook-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.deck-roster-grid,
+.tracker-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 20px;
+}
+.deck-roster-grid .list-row {
+  flex-wrap: wrap;
+  align-content: center;
+  gap: 8px;
+  padding: 9px 0;
+  min-width: 0;
+}
+.deck-roster-grid .list-row > .flex-1 {
+  overflow-wrap: anywhere;
+}
+.deck-roster-grid .type-label {
+  margin-left: 39px;
+}
+.tracker-list {
+  padding: 0 20px;
+}
+.tracker-list .tracker-row {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0;
+  min-width: 0;
+}
+.tracker-list .copy-controls {
+  flex: 0 0 100%;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.notebook-reference {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.upload-zone-active {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--accent));
+  outline: 2px solid hsl(var(--primary) / 0.25);
+}
+@media (max-width: 1000px) {
+  .deck-roster-grid,
+  .tracker-list,
+  .notebook-reference {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .deck-roster-grid,
+  .tracker-list,
+  .notebook-reference {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.history-table .history-actions {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: hsl(var(--card));
+  border-left: 1px solid hsl(var(--border));
+  width: 110px;
+  min-width: 110px;
+}
+.history-actions button {
+  justify-content: flex-start;
+}
+.history-actions button[aria-label="Delete match"] {
+  color: hsl(var(--destructive));
 }

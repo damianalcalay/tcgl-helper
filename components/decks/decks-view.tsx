@@ -242,6 +242,12 @@ export function DecksView({ data }: { data: AppData }) {
                   Edit deck
                 </Button>
               </div>
+              <div className="deck-reference-image">
+                <DeckImageViewer
+                  url={selected.image_url}
+                  name={selected.name}
+                />
+              </div>
               <div className="detail-grid">
                 <div>
                   <h3 className="subheading">
@@ -256,13 +262,17 @@ export function DecksView({ data }: { data: AppData }) {
                     </span>
                   </h3>
                   {deckRoster(data, selected.id).length ? (
-                    deckRoster(data, selected.id).map((c) => (
-                      <div className="list-row" key={c.id}>
-                        <span className="quantity-badge">x{c.quantity}</span>
-                        <span className="flex-1">{c.name}</span>
-                        <span className="type-label">{CARD_TYPES[c.type]}</span>
-                      </div>
-                    ))
+                    <div className="deck-roster-grid">
+                      {deckRoster(data, selected.id).map((c) => (
+                        <div className="list-row" key={c.id}>
+                          <span className="quantity-badge">x{c.quantity}</span>
+                          <span className="flex-1">{c.name}</span>
+                          <span className="type-label">
+                            {CARD_TYPES[c.type]}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
                     <p className="inline-empty">This deck has no cards yet.</p>
                   )}
@@ -314,10 +324,7 @@ export function DecksView({ data }: { data: AppData }) {
                       {selected.notes || "No notes added yet."}
                     </p>
                   </div>
-                  <DeckImageViewer
-                    url={selected.image_url}
-                    name={selected.name}
-                  />
+
                   <p className="text-xs text-muted-foreground">
                     Updated{" "}
                     {new Date(selected.updated_at).toLocaleDateString("en-GB", {

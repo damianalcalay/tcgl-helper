@@ -114,6 +114,9 @@ export function NotebookView({ data }: { data: AppData }) {
               ))}
             </div>
           </div>
+          <section className="panel deck-reference-image">
+            <DeckImageViewer url={deck.image_url} name={deck.name} />
+          </section>
           <div className="notebook-grid">
             <section className="panel tracker-panel">
               <div className="panel-heading">
@@ -230,10 +233,7 @@ export function NotebookView({ data }: { data: AppData }) {
                   )}
                 </div>
               </section>
-              <section className="panel reference-panel">
-                <h3 className="subheading">Deck image</h3>
-                <DeckImageViewer url={deck.image_url} name={deck.name} />
-              </section>
+
               <Button variant="outline" asChild>
                 <Link href={`/decks?deck=${deckId}`}>
                   Edit deck details
