@@ -1,9 +1,10 @@
 "use client";
-import { PrintingImages } from "@/components/decks/printing-images";
+import { exportDeckList } from "@/lib/domain/deck-import";
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
+  Copy,
   Layers3,
   Plus,
   Pencil,
@@ -38,6 +39,38 @@ export function DecksView({ data }: { data: AppData }) {
     id: string;
     name: string;
   } | null>(null);
+  const [exportFeedback, setExportFeedback] = useState<{
+    id: string;
+    message: string;
+    text?: string;
+    error?: boolean;
+  } | null>(null);
+  async function exportDeck(id: string) {
+    let text: string;
+    try {
+      text = exportDeckList(deckRoster(data, id));
+    } catch (error) {
+      setExportFeedback({
+        id,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to export this deck.",
+        error: true,
+      });
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setExportFeedback({ id, message: "Deck copied to clipboard." });
+    } catch {
+      setExportFeedback({
+        id,
+        message: "Clipboard unavailable. Copy the deck text below.",
+        text,
+      });
+    }
+  }
   const mutation = useMutation();
   const selected = data.decks.find((d) => d.id === selectedId);
   const complete = data.decks.filter(
@@ -238,46 +271,44 @@ export function DecksView({ data }: { data: AppData }) {
                   <p className="eyebrow">DECK OVERVIEW</p>
                   <h2>{selected.name}</h2>
                 </div>
-                <Button variant="outline" onClick={() => setDeckForm(selected)}>
-                  <Pencil />
-                  Edit deck
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={!deckRoster(data, selected.id).length}
+                    onClick={() => exportDeck(selected.id)}
+                  >
+                    <Copy />
+                    Export deck
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setDeckForm(selected)}
+                  >
+                    <Pencil />
+                    Edit deck
+                  </Button>
+                </div>
               </div>
+              {exportFeedback?.id === selected.id && (
+                <div className="px-5 pb-3">
+                  <p role={exportFeedback.error ? "alert" : "status"}>
+                    {exportFeedback.message}
+                  </p>
+                  {exportFeedback.text && (
+                    <textarea
+                      aria-label="Exported deck list"
+                      readOnly
+                      value={exportFeedback.text}
+                      className="w-full mt-2"
+                      rows={12}
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                  )}
+                </div>
+              )}
               <DeckMosaic cards={deckRoster(data, selected.id)} />
               <div className="detail-grid">
                 <div>
-                  <h3 className="subheading">
-                    <Layers3 size={16} />
-                    Card list
-                    <span className="ml-auto count-pill">
-                      {deckRoster(data, selected.id).reduce(
-                        (s, c) => s + c.quantity,
-                        0,
-                      )}{" "}
-                      / 60
-                    </span>
-                  </h3>
-                  {deckRoster(data, selected.id).length ? (
-                    <div className="deck-roster-grid">
-                      {deckRoster(data, selected.id).map((c) => (
-                        <div className="list-row" key={c.id}>
-                          {c.printings?.length ? (
-                            <PrintingImages
-                              printings={c.printings}
-                              name={c.name}
-                            />
-                          ) : null}
-                          <span className="quantity-badge">x{c.quantity}</span>
-                          <span className="flex-1">{c.name}</span>
-                          <span className="type-label">
-                            {CARD_TYPES[c.type]}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="inline-empty">This deck has no cards yet.</p>
-                  )}
                   <h3 className="subheading mt-6">
                     <GitBranch size={16} />
                     Variants

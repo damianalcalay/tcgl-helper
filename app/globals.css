@@ -2051,3 +2051,45 @@
 .notebook-game-mode .printing-image-button img {
   max-height: clamp(100px, 18vh, 190px);
 }
+/* Energy copies fill downward beside the card, six per column. */
+.notebook-workspace .tracker-list .tracker-row {
+  justify-content: flex-start;
+  align-self: start;
+}
+.notebook-workspace .tracker-list .tracker-energy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  column-gap: 8px;
+  align-items: start;
+}
+.tracker-energy > .printing-images,
+.tracker-energy > .field-hint {
+  grid-column: 1;
+  grid-row: 1;
+}
+.tracker-energy > .tracker-card-name {
+  grid-column: 1;
+  grid-row: 2;
+}
+.notebook-workspace .tracker-list .tracker-energy > .copy-controls {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 24px;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  margin: 0;
+  gap: 3px;
+}
+.notebook-workspace .tracker-list .tracker-energy > .quantity-badge {
+  right: auto;
+  left: 3px;
+}
+@media (max-width: 1100px) {
+  .notebook-workspace .tracker-list .tracker-energy {
+    grid-column: span 2 !important;
+  }
+}
+.notebook-workspace .tracker-list .tracker-energy > .quantity-badge {
+  top: 21px;
+}

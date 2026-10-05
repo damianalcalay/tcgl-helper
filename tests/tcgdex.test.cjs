@@ -185,3 +185,47 @@ test("every TCGdex stage and suffix maps to a selectable persisted type; EX and 
     cardType({ category: "Pokemon", stage: "Basic", suffix: "ex" }),
   );
 });
+test("deck export round-trips quantities, categories and alternate printings", () => {
+  const cards = [
+    {
+      name: "Ogerpon ex",
+      type: "basic_ex",
+      quantity: 4,
+      printings: [
+        { quantity: 2, set_code: "TWM", collector_number: "025" },
+        { quantity: 2, set_code: "TWM", collector_number: "211" },
+      ],
+    },
+    {
+      name: "Ultra Ball",
+      type: "item",
+      quantity: 2,
+      printings: [{ quantity: 2, set_code: "MEG", collector_number: "131" }],
+    },
+    {
+      name: "Basic {G} Energy",
+      type: "energy_basic",
+      quantity: 13,
+      printings: [{ quantity: 13, set_code: "MEE", collector_number: "009" }],
+    },
+  ];
+  const text = parser.exportDeckList(cards);
+  assert.match(text, /Pok.mon: 2\n2 Ogerpon ex TWM 25\n2 Ogerpon ex TWM 211/);
+  assert.match(text, /Trainer: 1\n2 Ultra Ball MEG 131/);
+  assert.match(
+    text,
+    /Energy: 1\n13 Basic \{G\} Energy MEE 9\n\nTotal Cards: 19/,
+  );
+  const imported = parser.parseDeckList(text);
+  assert.equal(imported.length, 3);
+  assert.equal(imported[0].quantity, 4);
+  assert.equal(imported[0].printings.length, 2);
+  assert.equal(imported[2].category, "energy");
+  assert.throws(
+    () =>
+      parser.exportDeckList([
+        { name: "Unknown card", type: "basic", quantity: 1 },
+      ]),
+    /Missing expansion/,
+  );
+});

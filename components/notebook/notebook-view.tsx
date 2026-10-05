@@ -310,7 +310,14 @@ export function NotebookView({ data }: { data: AppData }) {
                     .map((c, index, rows) => (
                       <Fragment key={`${c.id}:${c.offset}`}>
                         <div
-                          className="tracker-row"
+                          className={`tracker-row ${cardGroup(c.type) === "Energy" ? "tracker-energy" : ""}`}
+                          style={
+                            cardGroup(c.type) === "Energy"
+                              ? {
+                                  gridColumn: `span ${Math.min(4, 1 + Math.ceil((Math.ceil(c.quantity / 6) * 27) / 100))}`,
+                                }
+                              : undefined
+                          }
                           key={`${c.id}:${c.offset}`}
                         >
                           {(index === 0 ||
@@ -329,7 +336,16 @@ export function NotebookView({ data }: { data: AppData }) {
                             <strong>{c.name}</strong>
                             <small>{CARD_TYPES[c.type]}</small>
                           </div>
-                          <div className="copy-controls">
+                          <div
+                            className="copy-controls"
+                            style={
+                              cardGroup(c.type) === "Energy"
+                                ? {
+                                    gridTemplateRows: `repeat(${Math.min(6, c.quantity)}, 24px)`,
+                                  }
+                                : undefined
+                            }
+                          >
                             {Array.from({ length: c.quantity }, (_, i) => {
                               const copyNumber = c.offset + i;
                               const key = `${deckId}:${c.id}:${copyNumber}`;

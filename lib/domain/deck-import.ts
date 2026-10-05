@@ -1,4 +1,38 @@
 import type { CardPrinting } from "@/types/domain";
+import { CardOption, TCGDEX_TRAINERS } from "@/types/domain";
+
+export function exportDeckList(cards: CardOption[]): string {
+  const groups: Record<string, string[]> = {
+    Pokémon: [],
+    Trainer: [],
+    Energy: [],
+  };
+  for (const card of [...cards].sort((a, b) =>
+    a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
+  )) {
+    const printings = resizePrintings(card.printings, card.quantity);
+    if (!printings.length || printings.some((p) => p.set_code === "CUSTOM"))
+      throw new Error(
+        `Missing expansion and card number for ${card.name}. Import its printing before exporting.`,
+      );
+    const group =
+      card.type === "energy" || card.type.startsWith("energy_")
+        ? "Energy"
+        : card.type === "ace_spec" || card.type in TCGDEX_TRAINERS
+          ? "Trainer"
+          : "Pokémon";
+    for (const printing of printings)
+      groups[group].push(
+        `${printing.quantity} ${card.name} ${printing.set_code} ${printing.collector_number.replace(/^0+(?=\d)/, "")}`,
+      );
+  }
+  return (
+    Object.entries(groups)
+      .map(([group, lines]) => `${group}: ${lines.length}\n${lines.join("\n")}`)
+      .join("\n\n") +
+    `\n\nTotal Cards: ${cards.reduce((sum, c) => sum + c.quantity, 0)}\n`
+  );
+}
 export interface ImportedCard {
   name: string;
   quantity: number;
