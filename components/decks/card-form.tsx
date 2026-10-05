@@ -1,10 +1,10 @@
 "use client";
 import { useState } from "react";
 import { saveCard } from "@/app/actions";
-import { CARD_TYPES, Card } from "@/types/domain";
+import { Card } from "@/types/domain";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RegexCombobox } from "@/components/shared/regex-combobox";
+import { CardTypeSelector } from "./card-type-selector";
 import { ErrorMessage, Modal } from "@/components/shared/modal";
 import { useMutation } from "@/components/shared/use-mutation";
 export function CardForm({
@@ -47,15 +47,7 @@ export function CardForm({
             onChange={(e) => setName(e.target.value)}
           />
         </label>
-        <RegexCombobox
-          label="Card type"
-          options={Object.entries(CARD_TYPES).map(([value, label]) => ({
-            value,
-            label,
-          }))}
-          value={type}
-          onChange={setType}
-        />
+        <CardTypeSelector value={type} onChange={setType} />
         <ErrorMessage error={mutation.error} />
         <div className="form-actions">
           <Button

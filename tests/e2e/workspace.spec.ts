@@ -10,13 +10,44 @@ async function choose(page: Page, label: string, option: string) {
 async function createCard(page: Page, name: string, type: string) {
   await page.getByRole("button", { name: "Create card", exact: true }).click();
   await page.getByLabel("Card name", { exact: true }).fill(name);
-  await choose(page, "Card type", type);
+  await selectCardType(page, "Card type", type);
   await page
     .getByRole("button", { name: "Create card", exact: true })
     .last()
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByText(name, { exact: true })).toBeVisible();
+}
+async function selectCardType(page: Page, label: string, type: string) {
+  const trainer = (
+    {
+      Item: "item",
+      Supporter: "supporter",
+      Stadium: "stadium",
+      "Pokémon Tool": "tool",
+    } as Record<string, string>
+  )[type];
+  await page
+    .getByLabel(`${label} category`, { exact: true })
+    .selectOption(trainer ? "Trainer" : "Pokemon");
+  if (trainer)
+    await page
+      .getByLabel(`${label} trainer type`, { exact: true })
+      .selectOption(trainer);
+  else {
+    await page
+      .getByLabel(`${label} stage`, { exact: true })
+      .selectOption(
+        type.startsWith("Stage 1")
+          ? "stage_1"
+          : type.startsWith("Stage 2")
+            ? "stage_2"
+            : "basic",
+      );
+    await page
+      .getByLabel(`${label} suffix`, { exact: true })
+      .selectOption(type.endsWith(" ex") ? "ex" : "");
+  }
 }
 async function createDeck(page: Page, name: string, quantity: number) {
   await page.getByRole("button", { name: "Create deck", exact: true }).click();
@@ -82,7 +113,7 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await choose(page, "Card", "Test Evolution");
   await choose(page, "Copies to add", "1");
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await page.locator("input[type=file]").setInputFiles({
+  await page.getByLabel("Deck reference image").setInputFiles({
     name: "deck.png",
     mimeType: "image/png",
     buffer: Buffer.from(
@@ -342,7 +373,7 @@ test("histories expand independently and paginate the newest games; card edits a
     .getByRole("button", { name: "Edit Editable card", exact: true })
     .click();
   await page.getByLabel("Card name", { exact: true }).fill("Edited card");
-  await choose(page, "Card type", "Supporter");
+  await selectCardType(page, "Card type", "Supporter");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByText("Edited card", { exact: true })).toBeVisible();
@@ -482,17 +513,30 @@ test("imports a deck, creates missing cards and saves thirteen Energy copies", a
     page.getByRole("dialog").getByText("21 / 60 cards", { exact: true }),
   ).toBeVisible();
   await page
+    .getByLabel("Add image for Imported Grass Energy MEE 9")
+    .setInputFiles({
+      name: "grass.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    });
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Enlarge Imported Grass Energy MEE 9" }),
+  ).toBeVisible();
+  await page
     .getByRole("button", { name: "Create deck", exact: true })
     .last()
     .click();
   await expect(page.locator('p[role="alert"]')).toContainText("Choose a type");
-  await page
-    .getByLabel("Type for Imported Ogerpon ex")
-    .selectOption("basic_ex");
-  await page.getByLabel("Type for Imported Ultra Ball").selectOption("item");
-  await expect(page.getByLabel("Type for Imported Grass Energy")).toHaveValue(
-    "energy",
-  );
+  await selectCardType(page, "Type for Imported Ogerpon ex", "Basic ex");
+  await selectCardType(page, "Type for Imported Ultra Ball", "Item");
+  await expect(
+    page.getByLabel("Type for Imported Grass Energy energy type"),
+  ).toHaveValue("energy_basic");
   await page
     .getByRole("button", { name: "Create deck", exact: true })
     .last()
@@ -500,14 +544,34 @@ test("imports a deck, creates missing cards and saves thirteen Energy copies", a
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "Edit deck", exact: true }).click();
   await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Enlarge Imported Grass Energy MEE 9" }),
+  ).toBeVisible();
+  await expect(
     page.getByRole("dialog").getByText("21 / 60 cards", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("dialog").getByText("x13", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.goto("/notebook");
   await choose(page, "Active deck", "Imported deck");
+  await expect(
+    page.getByRole("button", { name: "Enlarge Imported Grass Energy MEE 9" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: /Imported Grass Energy copy 1: Available/ })
+    .click();
+  await page
+    .getByRole("button", { name: /Imported Grass Energy copy 1: Discard pile/ })
+    .click();
+  const manualPrize = page.getByRole("button", {
+    name: "Remove Imported Grass Energy copy 1 from Prizes",
+  });
+  await expect(manualPrize.getByRole("img")).toHaveAttribute("src", /cards/);
+  await manualPrize.click();
   await expect(
     page.getByText("Twilight Masquerade", { exact: true }).first(),
   ).toBeVisible();

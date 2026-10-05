@@ -12,7 +12,17 @@ function load(file) {
         target: ts.ScriptTarget.ES2022,
       },
     }).outputText,
-    { exports, fetch, AbortSignal, Map, Array, Object, Number },
+    {
+      exports,
+      fetch,
+      AbortSignal,
+      Map,
+      Array,
+      Object,
+      Number,
+      require: (name) =>
+        name === "@/types/domain" ? load("types/domain.ts") : require(name),
+    },
   );
   return exports;
 }

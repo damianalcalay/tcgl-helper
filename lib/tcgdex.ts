@@ -1,4 +1,10 @@
-import type { CardPrinting, CardType } from "@/types/domain";
+import {
+  TCGDEX_STAGES,
+  TCGDEX_SUFFIXES,
+  TCGDEX_TRAINERS,
+  type CardPrinting,
+  type CardType,
+} from "@/types/domain";
 import type { ImportedCard } from "@/lib/domain/deck-import";
 
 const API = "https://api.tcgdex.net/v2/en";
@@ -81,27 +87,35 @@ interface CardData {
   suffix?: string;
   trainerType?: string;
   rarity?: string;
+  energyType?: string;
 }
 export function cardType(card: CardData): CardType | undefined {
-  if (card.category === "Energy") return "energy";
-  if (card.category === "Trainer") {
+  const normalize = (value?: string) =>
+    value
+      ?.normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[\s_-]/g, "");
+  const category = normalize(card.category);
+  if (category === "energy")
+    return card.energyType === "Special" ? "energy_special" : "energy_basic";
+  if (category === "trainer") {
     if (/ace spec/i.test(card.rarity ?? "")) return "ace_spec";
-    return (
-      {
-        Supporter: "supporter",
-        Stadium: "stadium",
-        Tool: "tool",
-        Item: "item",
-      } as const
-    )[card.trainerType as "Item"];
+    if (normalize(card.trainerType) === "pokemontool") return "tool";
+    return Object.entries(TCGDEX_TRAINERS).find(
+      ([, label]) => normalize(label) === normalize(card.trainerType),
+    )?.[0] as CardType | undefined;
   }
-  const stage = (
-    { Basic: "basic", Stage1: "stage_1", Stage2: "stage_2" } as const
-  )[card.stage as "Basic"];
+  if (category !== "pokemon") return undefined;
+  const stage = Object.entries(TCGDEX_STAGES).find(
+    ([, label]) => normalize(label) === normalize(card.stage),
+  )?.[0];
   if (!stage) return undefined;
-  if (/mega/i.test(card.name) && card.suffix === "ex")
-    return `mega_${stage}_ex` as CardType;
-  return card.suffix === "ex" ? (`${stage}_ex` as CardType) : stage;
+  if (!card.suffix) return stage as CardType;
+  const suffix = Object.entries(TCGDEX_SUFFIXES).find(
+    ([, label]) => label === card.suffix,
+  )?.[0];
+  return suffix ? ((stage + "_" + suffix) as CardType) : undefined;
 }
 const normalNumber = (value: string | number) =>
   String(value)
@@ -136,6 +150,7 @@ export async function enrichDeck(cards: ImportedCard[]) {
         const card = await get<CardData>(
           `cards/${encodeURIComponent(brief.id)}`,
         );
+        const resolvedType = cardType(card);
         printings.push({
           ...printing,
           tcgdex_id: card.id,
@@ -147,8 +162,12 @@ export async function enrichDeck(cards: ImportedCard[]) {
           image_url: card.image?.startsWith("https://assets.tcgdex.net/en/")
             ? `${card.image}/high.webp`
             : undefined,
-          resolved_type: cardType(card),
+          resolved_type: resolvedType,
         });
+        if (!resolvedType)
+          warnings.push(
+            `TCGdex did not provide a supported type for ${entry.name} (${printing.set_code} ${printing.collector_number}). Choose its type below.`,
+          );
         if (!card.image)
           warnings.push(
             `No image for ${entry.name} (${printing.set_code} ${printing.collector_number}).`,

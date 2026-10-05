@@ -139,7 +139,9 @@ test("valid regex and invalid regex return predictable feedback", () => {
   }
   assert.equal(regexFilter(rows, "basic|item", (x) => x).items.length, 2);
   assert.match(regexFilter(rows, "[", (x) => x).error, /Invalid/);
-  assert.equal(Object.keys(domain.CARD_TYPES).length, 15);
+  assert.ok(Object.hasOwn(domain.CARD_TYPES, "basic_v"));
+  assert.ok(Object.hasOwn(domain.CARD_TYPES, "vstar"));
+  assert.ok(Object.hasOwn(domain.CARD_TYPES, "energy_special"));
 });
 
 test("history sorts actual instants correctly across UTC offsets", () => {
@@ -197,10 +199,14 @@ test("RESTRICT deletion and missing-record errors become friendly messages", asy
     },
     "next/cache": { revalidatePath: () => {} },
   });
-  const result = await actions.deleteEntity("deck", uuid);
+  const result = await actions.deleteEntity("card", uuid);
   assert.equal(result.success, false);
   assert.match(result.error, /used by a deck or match/);
   assert.doesNotMatch(result.error, /constraint/);
+  const deckResult = await actions.deleteEntity("deck", uuid);
+  assert.equal(deckResult.success, false);
+  assert.match(deckResult.error, /20261005_deck_history_cascade.sql/);
+  assert.match(deckResult.error, /have not been deleted/);
 });
 
 test("imported images cannot silently disappear when Supabase is missing the migration", async () => {

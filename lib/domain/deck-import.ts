@@ -44,11 +44,17 @@ export function validPrintings(value: unknown, quantity: number): boolean {
           "series_name",
           "regulation_mark",
           "resolved_type",
+          "manual_image_path",
         ].every(
           (field) =>
             p[field] === undefined ||
             (typeof p[field] === "string" && p[field].length <= 150),
         ) &&
+        (p.manual_image_path === undefined ||
+          (typeof p.manual_image_path === "string" &&
+            /^[0-9a-f-]{36}\/cards\/[0-9a-f-]{36}\.(png|jpg|webp)$/.test(
+              p.manual_image_path,
+            ))) &&
         (p.image_url === undefined ||
           (typeof p.image_url === "string" &&
             /^https:\/\/assets\.tcgdex\.net\/en\/[a-zA-Z0-9./_-]+\/high\.webp$/.test(

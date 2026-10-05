@@ -57,6 +57,13 @@ for (const migrated of [false, true])
         ),
       );
     }
+    if (migrated)
+      await db.exec(
+        fs.readFileSync(
+          "supabase/migrations/20261005_tcgdex_card_types.sql",
+          "utf8",
+        ),
+      );
     await db.query(`select set_config('request.jwt.claim.sub',$1,false)`, [
       USER,
     ]);
@@ -460,8 +467,54 @@ for (const migrated of [false, true])
       await db.query("select public.delete_entity('deck',$1)", [mine]);
     });
     await t.test(
+      "TCGdex types preserve Basic V starter eligibility and separate Basic and Special Energy limits",
+      async () => {
+        const basicV = await card("Canonical Basic V", "basic_v");
+        const basicEnergy = await card(
+          "Canonical Basic Energy",
+          "energy_basic",
+        );
+        const specialEnergy = await card(
+          "Canonical Special Energy",
+          "energy_special",
+        );
+        const did = await rpc(
+          "save_deck",
+          deckPayload("Canonical types", [
+            { card_id: basicV, quantity: 1 },
+            { card_id: basicEnergy, quantity: 13 },
+            { card_id: specialEnergy, quantity: 4 },
+          ]),
+        );
+        await assert.rejects(
+          rpc(
+            "save_deck",
+            deckPayload("Too much Special Energy", [
+              { card_id: specialEnergy, quantity: 5 },
+            ]),
+          ),
+          /1-4/,
+        );
+        await rpc("save_match", {
+          ...input,
+          deck_id: did,
+          opponent_deck_id: did,
+          starter_id: basicV,
+          opponent_starter_id: basicV,
+          prizes: [basicEnergy],
+        });
+      },
+    );
+    await t.test(
       "deck deletion cascades all history on either side and preserves unrelated matches and cards",
       async () => {
+        // The updated RPC must also work while the old RESTRICT keys remain.
+        await db.exec(`reset role;
+          alter table public.matches drop constraint matches_deck_id_user_id_fkey;
+          alter table public.matches add constraint matches_deck_id_user_id_fkey foreign key(deck_id,user_id) references public.decks(id,user_id) on delete restrict;
+          alter table public.matches drop constraint matches_opponent_deck_id_user_id_fkey;
+          alter table public.matches add constraint matches_opponent_deck_id_user_id_fkey foreign key(opponent_deck_id,user_id) references public.decks(id,user_id) on delete restrict;
+          set role authenticated;`);
         const starter = await card("Cascade starter");
         const makeDeck = (name) =>
           rpc(

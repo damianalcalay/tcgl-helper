@@ -1810,3 +1810,28 @@
 .prize-thumbnail strong {
   overflow-wrap: anywhere;
 }
+.card-type-fields {
+  min-width: 140px;
+}
+.card-type-fields select {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 5px;
+  background: hsl(var(--background));
+  padding: 5px 8px;
+}
+.printing-image-placeholder input[type="file"] {
+  max-width: 100%;
+  font-size: 11px;
+}
+.printing-compact .printing-image-placeholder {
+  width: 130px;
+  flex-basis: 130px;
+}
+.editor-card-list {
+  max-height: 480px;
+}
+.editor-card {
+  flex-wrap: wrap;
+}

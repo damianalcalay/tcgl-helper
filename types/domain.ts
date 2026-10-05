@@ -1,4 +1,4 @@
-export const CARD_TYPES = {
+const LEGACY_CARD_TYPES = {
   basic: "Basic",
   basic_ex: "Basic ex",
   mega_basic_ex: "Mega Basic ex",
@@ -15,8 +15,64 @@ export const CARD_TYPES = {
   ace_spec: "ACE SPEC",
   energy: "Energy",
 } as const;
-export type CardType = keyof typeof CARD_TYPES;
-export const BASIC_TYPES: CardType[] = ["basic", "basic_ex", "mega_basic_ex"];
+export const TCGDEX_STAGES = {
+  basic: "Basic",
+  stage_1: "Stage1",
+  stage_2: "Stage2",
+  baby: "Baby",
+  break: "BREAK",
+  level_up: "LEVEL-UP",
+  mega: "MEGA",
+  restored: "RESTORED",
+  v_union: "V-UNION",
+  vmax: "VMAX",
+  vstar: "VSTAR",
+} as const;
+export const TCGDEX_SUFFIXES = {
+  ex: "ex",
+  upper_ex: "EX",
+  gx: "GX",
+  legend: "Legend",
+  prime: "Prime",
+  sp: "SP",
+  tag_team_gx: "TAG TEAM-GX",
+  v: "V",
+} as const;
+export const TCGDEX_TRAINERS = {
+  item: "Item",
+  supporter: "Supporter",
+  stadium: "Stadium",
+  tool: "Tool",
+  rocket_secret_machine: "Rocket's Secret Machine",
+  technical_machine: "Technical Machine",
+} as const;
+export type StageKey = keyof typeof TCGDEX_STAGES;
+export type SuffixKey = keyof typeof TCGDEX_SUFFIXES;
+export type CardType =
+  | keyof typeof LEGACY_CARD_TYPES
+  | StageKey
+  | `${StageKey}_${SuffixKey}`
+  | keyof typeof TCGDEX_TRAINERS
+  | "energy_basic"
+  | "energy_special";
+export const CARD_TYPES = { ...LEGACY_CARD_TYPES } as Record<CardType, string>;
+for (const [stage, label] of Object.entries(TCGDEX_STAGES)) {
+  CARD_TYPES[stage as CardType] = label;
+  for (const [suffix, suffixLabel] of Object.entries(TCGDEX_SUFFIXES))
+    CARD_TYPES[`${stage}_${suffix}` as CardType] = `${label} ${suffixLabel}`;
+}
+Object.assign(CARD_TYPES, TCGDEX_TRAINERS, {
+  energy_basic: "Energy · Normal (Basic)",
+  energy_special: "Energy · Special",
+});
+export const BASIC_TYPES: CardType[] = [
+  "basic",
+  ...Object.keys(TCGDEX_SUFFIXES).map((s) => `basic_${s}` as CardType),
+  "mega_basic_ex",
+];
+export function unlimitedEnergy(type: string) {
+  return type === "energy" || type === "energy_basic";
+}
 export interface Card {
   id: string;
   name: string;
@@ -40,6 +96,7 @@ export interface CardPrinting {
   series_name?: string;
   regulation_mark?: string;
   image_url?: string;
+  manual_image_path?: string;
   resolved_type?: CardType;
 }
 export interface Deck {

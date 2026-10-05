@@ -23,6 +23,12 @@ function text(value: unknown): value is string {
 function fail(error: unknown): ActionResult {
   console.error("TCGL Helper mutation failed", error);
   const e = error as { code?: string; message?: string };
+  if (e.code === "22P02" && e.message?.includes("card_type"))
+    return {
+      success: false,
+      error:
+        "Install 20261005_tcgdex_card_types.sql in Supabase to save the TCGdex card types.",
+    };
   if (e.code === "42703")
     return {
       success: false,
@@ -145,6 +151,21 @@ export async function saveDeck(input: DeckInput): Promise<ActionResult> {
     };
   try {
     const client = await authenticated();
+    if (
+      input.cards.some((c) => c.printings?.some((p) => p.manual_image_path))
+    ) {
+      const { data: auth } = await client.auth.getUser();
+      if (
+        input.cards.some((c) =>
+          c.printings?.some(
+            (p) =>
+              p.manual_image_path &&
+              !p.manual_image_path.startsWith(`${auth.user!.id}/cards/`),
+          ),
+        )
+      )
+        return { success: false, error: "Invalid card image path." };
+    }
     if (input.cards.some((c) => c.printings?.length)) {
       const { error: schemaError } = await client
         .from("deck_cards")
@@ -209,6 +230,16 @@ export async function deleteEntity(
       entity,
       entity_id: entityId,
     });
+    if (
+      entity === "deck" &&
+      (error?.code === "23503" || error?.code === "23001")
+    ) {
+      return {
+        success: false,
+        error:
+          "Deck deletion is still blocked by the old database setup. Run 20261005_deck_history_cascade.sql in the Supabase SQL Editor, then try again. Your deck and history have not been deleted.",
+      };
+    }
     if (error) throw error;
     refresh();
     return { success: true };

@@ -56,6 +56,17 @@ export async function loadAppData(): Promise<{
         allRows<Prize>(client, "match_prizes"),
       ]);
     await Promise.all(
+      deckCards.flatMap((row) =>
+        (row.printings ?? []).map(async (printing) => {
+          if (!printing.manual_image_path) return;
+          const { data } = await client.storage
+            .from("deck-images")
+            .createSignedUrl(printing.manual_image_path, 3600);
+          if (data) printing.image_url = data.signedUrl;
+        }),
+      ),
+    );
+    await Promise.all(
       decks.map(async (deck) => {
         if (!deck.image_path) return;
         const { data } = await client.storage

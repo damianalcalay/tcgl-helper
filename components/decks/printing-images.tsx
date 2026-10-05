@@ -51,9 +51,11 @@ export function PrizeThumbnail({
 function PrintingImage({
   printing,
   name,
+  onImageChange,
 }: {
   printing: CardPrinting;
   name: string;
+  onImageChange?: (file: File) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -77,6 +79,20 @@ function PrintingImage({
         <div className="printing-image-placeholder">
           {name}
           <small>Image unavailable</small>
+          {onImageChange && (
+            <label className="field-label">
+              Add image
+              <input
+                type="file"
+                aria-label={`Add image for ${name} ${printing.set_code} ${printing.collector_number}`}
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) onImageChange(file);
+                }}
+              />
+            </label>
+          )}
         </div>
       )}
       {open && (
@@ -99,29 +115,47 @@ export function PrintingImages({
   printings,
   name,
   compact = false,
+  onImageChange,
 }: {
   printings?: CardPrinting[];
   name: string;
   compact?: boolean;
+  onImageChange?: (index: number, file: File) => void;
 }) {
-  if (!printings?.length)
+  if (!printings?.length && !onImageChange)
     return (
       <div className="field-hint">Import a deck list to add card images.</div>
     );
   return (
     <div className={`printing-images ${compact ? "printing-compact" : ""}`}>
-      {printings.map((p, index) => (
+      {(printings?.length
+        ? printings
+        : [{ quantity: 1, set_code: "CUSTOM", collector_number: "0" }]
+      ).map((p, index) => (
         <figure key={`${p.set_code}:${p.collector_number}:${index}`}>
-          <PrintingImage printing={p} name={name} />
+          <PrintingImage
+            key={p.image_url ?? "missing"}
+            printing={p}
+            name={name}
+            onImageChange={
+              onImageChange ? (file) => onImageChange(index, file) : undefined
+            }
+          />
           <figcaption>
-            <strong>{p.set_name ?? p.set_code}</strong>
-            <span>
-              ×{p.quantity} · {p.set_code} · #{p.collector_number}
-              {p.regulation_mark
-                ? ` · Regulation ${p.regulation_mark}`
-                : " · Regulation —"}
-            </span>
-            {p.series_name && <small>{p.series_name}</small>}
+            {p.set_code === "CUSTOM" ? (
+              <strong>Manual card image</strong>
+            ) : (
+              <>
+                <strong>{p.set_name ?? p.set_code}</strong>
+                <span>
+                  ×{p.quantity} · {p.set_code} · #{p.collector_number}
+                  {p.regulation_mark
+                    ? ` · Regulation ${p.regulation_mark}`
+                    : " · Regulation —"}
+                </span>
+                {p.series_name && <small>{p.series_name}</small>}
+              </>
+            )}
           </figcaption>
         </figure>
       ))}

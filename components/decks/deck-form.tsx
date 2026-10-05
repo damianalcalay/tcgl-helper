@@ -1,13 +1,20 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Plus, Trash2, Upload, X, Loader2 } from "lucide-react";
-import { AppData, CARD_TYPES, Deck, DeckInput } from "@/types/domain";
+import {
+  AppData,
+  CARD_TYPES,
+  Deck,
+  DeckInput,
+  unlimitedEnergy,
+} from "@/types/domain";
 import { deckRoster, validateQuantities } from "@/lib/domain/logic";
 import {
   parseDeckList,
   resizePrintings,
   ImportedCard,
 } from "@/lib/domain/deck-import";
+import { CardTypeSelector } from "./card-type-selector";
 import { PrintingImages } from "@/components/decks/printing-images";
 import { saveDeck } from "@/app/actions";
 import { createClient } from "@/lib/supabase/client";
@@ -47,11 +54,58 @@ export function DeckForm({
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const imageFiles = useRef<Record<string, { file: File; preview: string }>>(
+    {},
+  );
+  useEffect(
+    () => () => {
+      Object.values(imageFiles.current).forEach(({ preview }) =>
+        URL.revokeObjectURL(preview),
+      );
+    },
+    [],
+  );
+  function addCardImage(cardId: string, index: number, image: File) {
+    if (
+      image.size > 20 * 1024 * 1024 ||
+      !["image/png", "image/jpeg", "image/webp"].includes(image.type)
+    )
+      return mutation.setError(
+        "Choose a PNG, JPEG, or WebP image up to 20 MB.",
+      );
+    const key = `${cardId}:${index}`;
+    if (imageFiles.current[key])
+      URL.revokeObjectURL(imageFiles.current[key].preview);
+    const preview = URL.createObjectURL(image);
+    imageFiles.current[key] = { file: image, preview };
+    setCards((rows) =>
+      rows.map((row) =>
+        row.card_id !== cardId
+          ? row
+          : {
+              ...row,
+              printings: (row.printings?.length
+                ? row.printings
+                : [
+                    {
+                      quantity: row.quantity,
+                      set_code: "CUSTOM",
+                      collector_number: "0",
+                    },
+                  ]
+              ).map((p, i) => (i === index ? { ...p, image_url: preview } : p)),
+            },
+      ),
+    );
+    mutation.setError("");
+  }
   const [draftCards, setDraftCards] = useState<
     { id: string; name: string; type: string }[]
   >([]);
   const library = [...data.cards, ...draftCards];
-  const energyIds = library.filter((c) => c.type === "energy").map((c) => c.id);
+  const energyIds = library
+    .filter((c) => unlimitedEnergy(c.type))
+    .map((c) => c.id);
   async function importList() {
     setImporting(true);
     setImportWarnings([]);
@@ -73,21 +127,40 @@ export function DeckForm({
             c.name.trim().toLocaleLowerCase() ===
             entry.name.toLocaleLowerCase(),
         );
-        const card = existing ?? {
-          id: crypto.randomUUID(),
-          name: entry.name,
-          type:
-            entry.printings.find((p) => p.resolved_type)?.resolved_type ??
-            (entry.category === "energy" ? "energy" : ""),
-        };
+        const inferredType =
+          entry.printings.find((p) => p.resolved_type)?.resolved_type ??
+          (entry.category === "energy" ? "energy" : "");
+        const card = existing
+          ? { ...existing, type: existing.type || inferredType }
+          : { id: crypto.randomUUID(), name: entry.name, type: inferredType };
         if (!data.cards.some((c) => c.id === card.id)) drafts.push(card);
         return {
           card_id: card.id,
           quantity: entry.quantity,
-          printings: entry.printings,
+          printings: entry.printings.map((p) => {
+            const previous = cards
+              .find((row) => row.card_id === card.id)
+              ?.printings?.find(
+                (old) =>
+                  old.set_code === p.set_code &&
+                  old.collector_number.replace(/^0+(?=\d)/, "") ===
+                    p.collector_number.replace(/^0+(?=\d)/, ""),
+              );
+            return previous?.manual_image_path
+              ? {
+                  ...p,
+                  manual_image_path: previous.manual_image_path,
+                  image_url: previous.image_url,
+                }
+              : p;
+          }),
         };
       });
       setDraftCards(drafts);
+      Object.values(imageFiles.current).forEach(({ preview }) =>
+        URL.revokeObjectURL(preview),
+      );
+      imageFiles.current = {};
       setCards(next);
       setImportWarnings(result.warnings);
       mutation.setError("");
@@ -141,14 +214,57 @@ export function DeckForm({
     const usedDrafts = draftCards.filter((c) =>
       cards.some((row) => row.card_id === c.id),
     );
-    if (usedDrafts.some((c) => !c.type))
+    const unresolved = usedDrafts.filter((c) => !c.type);
+    if (unresolved.length)
       return mutation.setError(
-        "Choose a type for each new card before saving.",
+        `Choose a type for: ${unresolved.map((c) => c.name).join(", ")}. TCGdex could not identify their types. Retry the import or choose these types below.`,
       );
     const validation = validateQuantities(cards, energyIds);
     if (validation) return mutation.setError(validation);
     await mutation.run(
       async () => {
+        const uploadedCards: string[] = [];
+        const preparedCards = cards.map((row) => ({
+          ...row,
+          printings: resizePrintings(row.printings, row.quantity).map((p) => ({
+            ...p,
+            image_url: p.manual_image_path ? undefined : p.image_url,
+          })),
+        }));
+        const client = createClient();
+        const { data: auth } = await client.auth.getUser();
+        if (!auth.user)
+          return { success: false, error: "Sign in again to upload an image." };
+        for (const row of preparedCards) {
+          for (const [index, printing] of row.printings.entries()) {
+            const entry = imageFiles.current[`${row.card_id}:${index}`];
+            if (!entry) continue;
+            const extension =
+              entry.file.type === "image/png"
+                ? "png"
+                : entry.file.type === "image/webp"
+                  ? "webp"
+                  : "jpg";
+            const path = `${auth.user.id}/cards/${crypto.randomUUID()}.${extension}`;
+            const { error } = await client.storage
+              .from("deck-images")
+              .upload(path, entry.file, {
+                contentType: entry.file.type,
+                upsert: false,
+              });
+            if (error) {
+              if (uploadedCards.length)
+                await client.storage.from("deck-images").remove(uploadedCards);
+              return {
+                success: false,
+                error: "Unable to upload the card image. Try again.",
+              };
+            }
+            uploadedCards.push(path);
+            printing.manual_image_path = path;
+            printing.image_url = undefined;
+          }
+        }
         let imagePath = removeImage ? null : (deck?.image_path ?? null);
         let uploaded: string | null = null;
         if (file) {
@@ -170,6 +286,8 @@ export function DeckForm({
             .from("deck-images")
             .upload(uploaded, file, { contentType: file.type, upsert: false });
           if (error) {
+            if (uploadedCards.length)
+              await client.storage.from("deck-images").remove(uploadedCards);
             console.error("Image upload failed", error);
             return {
               success: false,
@@ -185,10 +303,7 @@ export function DeckForm({
           playstyle,
           notes,
           image_path: imagePath,
-          cards: cards.map((c) => ({
-            ...c,
-            printings: resizePrintings(c.printings, c.quantity),
-          })),
+          cards: preparedCards,
           variants,
           new_cards: usedDrafts.map((c) => ({
             ...c,
@@ -197,6 +312,8 @@ export function DeckForm({
         });
         if (!result.success && uploaded)
           await createClient().storage.from("deck-images").remove([uploaded]);
+        if (!result.success && uploadedCards.length)
+          await client.storage.from("deck-images").remove(uploadedCards);
         if (result.success && deck?.image_path && deck.image_path !== imagePath)
           await createClient()
             .storage.from("deck-images")
@@ -334,36 +451,25 @@ export function DeckForm({
                       printings={c.printings}
                       name={card?.name ?? "Card"}
                       compact
+                      onImageChange={(index, file) =>
+                        addCardImage(c.card_id, index, file)
+                      }
                     />
                     <div className="editor-card">
                       <span className="quantity-badge">x{c.quantity}</span>
                       <span className="flex-1">{card?.name}</span>
                       {draftCards.some((d) => d.id === c.card_id) && (
-                        <label className="field-label">
-                          New card type
-                          <select
-                            aria-label={"Type for " + card?.name}
-                            value={card?.type ?? ""}
-                            onChange={(e) =>
-                              setDraftCards((ds) =>
-                                ds.map((d) =>
-                                  d.id === c.card_id
-                                    ? { ...d, type: e.target.value }
-                                    : d,
-                                ),
-                              )
-                            }
-                          >
-                            <option value="">Choose type</option>
-                            {Object.entries(CARD_TYPES).map(
-                              ([value, label]) => (
-                                <option key={value} value={value}>
-                                  {label}
-                                </option>
+                        <CardTypeSelector
+                          label={"Type for " + card?.name}
+                          value={card?.type ?? ""}
+                          onChange={(type) =>
+                            setDraftCards((ds) =>
+                              ds.map((d) =>
+                                d.id === c.card_id ? { ...d, type } : d,
                               ),
-                            )}
-                          </select>
-                        </label>
+                            )
+                          }
+                        />
                       )}
                       <div className="quantity-controls">
                         <button
@@ -388,7 +494,8 @@ export function DeckForm({
                           type="button"
                           aria-label={`Add one ${card?.name}`}
                           disabled={
-                            c.quantity >= (card?.type === "energy" ? 60 : 4) ||
+                            c.quantity >=
+                              (unlimitedEnergy(card?.type ?? "") ? 60 : 4) ||
                             total >= 60
                           }
                           onClick={() =>
@@ -501,6 +608,7 @@ export function DeckForm({
               <span>Drag and drop an image here, or choose a file.</span>
               <input
                 type="file"
+                aria-label="Deck reference image"
                 accept="image/png,image/jpeg,image/webp"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

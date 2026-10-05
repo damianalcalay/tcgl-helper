@@ -12,7 +12,17 @@ function load(file, fetch) {
         target: ts.ScriptTarget.ES2022,
       },
     }).outputText,
-    { exports, fetch, AbortSignal, Map, Array, Object, Number },
+    {
+      exports,
+      fetch,
+      AbortSignal,
+      Map,
+      Array,
+      Object,
+      Number,
+      require: (name) =>
+        name === "@/types/domain" ? load("types/domain.ts") : require(name),
+    },
   );
   return exports;
 }
@@ -84,6 +94,26 @@ test("printing counts resize with deck edits and reject unsafe URLs or inconsist
   );
   assert.equal(parser.validPrintings(null, 2), false);
   assert.equal(parser.validPrintings([], 2), true);
+  assert.equal(
+    parser.validPrintings(
+      [
+        {
+          ...printings[0],
+          manual_image_path:
+            "10000000-0000-4000-8000-000000000001/cards/20000000-0000-4000-8000-000000000001.png",
+        },
+      ],
+      2,
+    ),
+    true,
+  );
+  assert.equal(
+    parser.validPrintings(
+      [{ ...printings[0], manual_image_path: "../someone-else.png" }],
+      2,
+    ),
+    false,
+  );
 });
 test("maps Trainer, Energy and evolved ex types without guessing missing regulation marks", () => {
   const { cardType } = load("lib/tcgdex.ts");
@@ -104,5 +134,54 @@ test("maps Trainer, Energy and evolved ex types without guessing missing regulat
     }),
     "stage_2_ex",
   );
-  assert.equal(cardType({ category: "Energy" }), "energy");
+  assert.equal(
+    cardType({ category: "Energy", energyType: "Normal" }),
+    "energy_basic",
+  );
+  assert.equal(
+    cardType({ category: "Energy", energyType: "Special" }),
+    "energy_special",
+  );
+  assert.equal(
+    cardType({ category: "Trainer", trainerType: "Pokemon Tool" }),
+    "tool",
+  );
+  assert.equal(
+    cardType({ category: "Trainer", trainerType: "Pokémon Tool" }),
+    "tool",
+  );
+  assert.equal(
+    cardType({
+      category: "Pokemon",
+      stage: "Stage 2",
+      suffix: "EX",
+      name: "Hydrapple ex",
+    }),
+    "stage_2_upper_ex",
+  );
+  assert.equal(cardType({ category: "Pokemon", name: "Unknown" }), undefined);
+  assert.equal(
+    cardType({ category: "Trainer", trainerType: "Unknown" }),
+    undefined,
+  );
+});
+
+test("every TCGdex stage and suffix maps to a selectable persisted type; EX and ex remain distinct", () => {
+  const { cardType } = load("lib/tcgdex.ts");
+  const { TCGDEX_STAGES, TCGDEX_SUFFIXES, TCGDEX_TRAINERS, CARD_TYPES } =
+    load("types/domain.ts");
+  for (const [stageKey, stage] of Object.entries(TCGDEX_STAGES)) {
+    assert.equal(cardType({ category: "Pokemon", stage }), stageKey);
+    for (const [suffixKey, suffix] of Object.entries(TCGDEX_SUFFIXES)) {
+      const type = cardType({ category: "Pokemon", stage, suffix });
+      assert.equal(type, `${stageKey}_${suffixKey}`);
+      assert.ok(Object.hasOwn(CARD_TYPES, type));
+    }
+  }
+  for (const [key, trainerType] of Object.entries(TCGDEX_TRAINERS))
+    assert.equal(cardType({ category: "Trainer", trainerType }), key);
+  assert.notEqual(
+    cardType({ category: "Pokemon", stage: "Basic", suffix: "EX" }),
+    cardType({ category: "Pokemon", stage: "Basic", suffix: "ex" }),
+  );
 });

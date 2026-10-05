@@ -1,6 +1,6 @@
 -- TCGL Helper: run once in the SQL Editor of a clean Supabase project.
 begin;
-create type public.card_type as enum ('basic','basic_ex','mega_basic_ex','stage_1','stage_1_ex','mega_stage_1_ex','stage_2','stage_2_ex','mega_stage_2_ex','supporter','stadium','tool','item','ace_spec','energy');
+create type public.card_type as enum ('basic','basic_ex','mega_basic_ex','stage_1','stage_1_ex','mega_stage_1_ex','stage_2','stage_2_ex','mega_stage_2_ex','supporter','stadium','tool','item','ace_spec','energy','basic_upper_ex','basic_gx','basic_legend','basic_prime','basic_sp','basic_tag_team_gx','basic_v','stage_1_upper_ex','stage_1_gx','stage_1_legend','stage_1_prime','stage_1_sp','stage_1_tag_team_gx','stage_1_v','stage_2_upper_ex','stage_2_gx','stage_2_legend','stage_2_prime','stage_2_sp','stage_2_tag_team_gx','stage_2_v','baby','baby_ex','baby_upper_ex','baby_gx','baby_legend','baby_prime','baby_sp','baby_tag_team_gx','baby_v','break','break_ex','break_upper_ex','break_gx','break_legend','break_prime','break_sp','break_tag_team_gx','break_v','level_up','level_up_ex','level_up_upper_ex','level_up_gx','level_up_legend','level_up_prime','level_up_sp','level_up_tag_team_gx','level_up_v','mega','mega_ex','mega_upper_ex','mega_gx','mega_legend','mega_prime','mega_sp','mega_tag_team_gx','mega_v','restored','restored_ex','restored_upper_ex','restored_gx','restored_legend','restored_prime','restored_sp','restored_tag_team_gx','restored_v','v_union','v_union_ex','v_union_upper_ex','v_union_gx','v_union_legend','v_union_prime','v_union_sp','v_union_tag_team_gx','v_union_v','vmax','vmax_ex','vmax_upper_ex','vmax_gx','vmax_legend','vmax_prime','vmax_sp','vmax_tag_team_gx','vmax_v','vstar','vstar_ex','vstar_upper_ex','vstar_gx','vstar_legend','vstar_prime','vstar_sp','vstar_tag_team_gx','vstar_v','rocket_secret_machine','technical_machine','energy_basic','energy_special');
 create type public.match_result as enum ('win','loss','draw');
 create table public.cards (
  id uuid primary key default gen_random_uuid(), user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
@@ -44,7 +44,7 @@ create table public.match_rosters (
 );
 create function public.check_card_copy_limit() returns trigger language plpgsql set search_path='' as $$
 begin
- if new.type<>'energy' and exists(select 1 from public.deck_cards where card_id=new.id and quantity>4) then
+ if new.type::text not in ('energy','energy_basic') and exists(select 1 from public.deck_cards where card_id=new.id and quantity>4) then
  raise check_violation using message='Reduce deck quantities before changing this Energy card type.';
  end if;
  return new;
@@ -81,7 +81,7 @@ create trigger deck_cards_touch before update on public.deck_cards for each row 
 create function public.check_deck_limit() returns trigger language plpgsql set search_path='' as $$
 declare total integer;
 begin
- if new.quantity>4 and not exists(select 1 from public.cards where id=new.card_id and type='energy') then
+ if new.quantity>4 and not exists(select 1 from public.cards where id=new.card_id and type::text in ('energy','energy_basic')) then
  raise check_violation using message='Use 1-4 copies per non-Energy card.';
  end if;
  perform 1 from public.decks where id=new.deck_id for update;
@@ -158,8 +158,8 @@ begin
  select jsonb_agg(jsonb_build_object('card_id',c.id,'name',c.name,'type',c.type,'quantity',dc.quantity)) into their_roster from public.deck_cards dc join public.cards c on c.id=dc.card_id where dc.deck_id=oid;
  end if;
  sid:=(payload->>'starter_id')::uuid; osid:=(payload->>'opponent_starter_id')::uuid;
- if not exists(select 1 from jsonb_array_elements(my_roster) x where x->>'card_id'=sid::text and x->>'type' in ('basic','basic_ex','mega_basic_ex')) then raise exception 'Choose a Basic starter from your deck.'; end if;
- if not exists(select 1 from jsonb_array_elements(their_roster) x where x->>'card_id'=osid::text and x->>'type' in ('basic','basic_ex','mega_basic_ex')) then raise exception 'Choose a Basic starter from the opponent deck.'; end if;
+ if not exists(select 1 from jsonb_array_elements(my_roster) x where x->>'card_id'=sid::text and x->>'type' in ('basic','basic_ex','basic_upper_ex','basic_gx','basic_legend','basic_prime','basic_sp','basic_tag_team_gx','basic_v','mega_basic_ex')) then raise exception 'Choose a Basic starter from your deck.'; end if;
+ if not exists(select 1 from jsonb_array_elements(their_roster) x where x->>'card_id'=osid::text and x->>'type' in ('basic','basic_ex','basic_upper_ex','basic_gx','basic_legend','basic_prime','basic_sp','basic_tag_team_gx','basic_v','mega_basic_ex')) then raise exception 'Choose a Basic starter from the opponent deck.'; end if;
  if jsonb_array_length(coalesce(payload->'prizes','[]'))>6 then raise exception 'Select at most six prize cards.'; end if;
  for pid,needed in select value,count(*)::integer from jsonb_array_elements_text(coalesce(payload->'prizes','[]')) group by value loop
  if not exists(select 1 from jsonb_array_elements(my_roster) x where x->>'card_id'=pid and (x->>'quantity')::integer>=needed) then raise exception 'Prize copies must belong to your deck and respect its quantities.'; end if;
@@ -185,7 +185,9 @@ create function public.delete_entity(entity text, entity_id uuid) returns void l
 begin
  if auth.uid() is null then raise exception 'Sign in to continue.'; end if;
  perform pg_advisory_xact_lock(hashtextextended(auth.uid()::text,0));
- if entity='deck' then delete from public.decks where id=entity_id and user_id=auth.uid();
+ if entity='deck' then
+ delete from public.matches where user_id=auth.uid() and (deck_id=entity_id or opponent_deck_id=entity_id);
+ delete from public.decks where id=entity_id and user_id=auth.uid();
  elsif entity='match' then delete from public.matches where id=entity_id and user_id=auth.uid();
  elsif entity='card' then delete from public.cards where id=entity_id and user_id=auth.uid();
  else raise exception 'Invalid entity.'; end if;
