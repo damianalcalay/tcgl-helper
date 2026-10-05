@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- Cached card thumbnails in the prize picker. */
 "use client";
 import { useState } from "react";
 import {
@@ -18,8 +19,10 @@ import { Button } from "@/components/ui/button";
 import { Modal, ErrorMessage } from "@/components/shared/modal";
 import { RegexCombobox } from "@/components/shared/regex-combobox";
 import { useMutation } from "@/components/shared/use-mutation";
-import { CARD_BACKS, PrizeAvatar } from "./combat-log-view";
-import { X, Loader2 } from "lucide-react";
+import { ChoiceSelect } from "@/components/shared/choice-select";
+import { sortedRoster } from "@/components/decks/deck-mosaic";
+import { PrizeAvatar } from "./combat-log-view";
+import { Loader2 } from "lucide-react";
 export function MatchForm({
   data,
   match,
@@ -45,10 +48,8 @@ export function MatchForm({
       return null;
     }
   });
-  const [cardBack, setCardBack] = useState(match?.card_back ?? "classic");
-  const [opponentBack, setOpponentBack] = useState(
-    match?.opponent_card_back ?? "classic",
-  );
+  const [cardBack] = useState(match?.card_back ?? "classic");
+  const [opponentBack] = useState(match?.opponent_card_back ?? "classic");
   const [logError, setLogError] = useState("");
   const [deckId, setDeckId] = useState(
     match?.deck_id ?? initialValues?.deck_id ?? "",
@@ -82,6 +83,14 @@ export function MatchForm({
   const basics = mine.filter((c) => BASIC_TYPES.includes(c.type));
   const theirBasics = theirs.filter((c) => BASIC_TYPES.includes(c.type));
   const selectedCount = prizes.filter(Boolean).length;
+  const inferredResult =
+    mode === "manual"
+      ? myPrizes > theirPrizes
+        ? "win"
+        : myPrizes < theirPrizes
+          ? "loss"
+          : "draw"
+      : result;
   function applyLog(
     log: ParsedCombatLog,
     player: string,
@@ -142,7 +151,7 @@ export function MatchForm({
       );
     if (
       !deckId ||
-      !result ||
+      !inferredResult ||
       !starter ||
       (mode === "manual" && (!opponentId || !theirStarter)) ||
       (mode === "log" && !opponentName.trim())
@@ -178,7 +187,7 @@ export function MatchForm({
           deck_id: deckId,
           opponent_deck_id: mode === "log" ? null : opponentId,
           opponent_deck_name: opponentName.trim(),
-          result: result as Result,
+          result: inferredResult as Result,
           my_prizes: myPrizes,
           opponent_prizes: theirPrizes,
           starter_id: starter,
@@ -288,7 +297,7 @@ export function MatchForm({
               <ErrorMessage error={logError} />
               {parsed && (
                 <>
-                  <RegexCombobox
+                  <ChoiceSelect
                     label="Your player"
                     value={logPlayer}
                     options={parsed.players.map((p) => ({
@@ -355,52 +364,21 @@ export function MatchForm({
                         );
                       })}
                   </div>
-                  <details>
-                    <summary>
-                      Opening prize cards · {selectedCount} known /{" "}
-                      {6 - selectedCount} unknown
-                    </summary>
-                    <div className="prize-grid">
-                      {prizes.map((value, index) => (
-                        <RegexCombobox
-                          key={index}
-                          label={`Prize ${index + 1}`}
-                          placeholder="Unknown prize card"
-                          clearable
-                          value={value}
-                          options={mine.map((c) => ({
-                            value: c.id,
-                            label: c.name,
-                            disabled:
-                              prizes.filter((v, i) => i !== index && v === c.id)
-                                .length >= c.quantity,
-                          }))}
-                          onChange={(v) =>
-                            setPrizes((ps) =>
-                              ps.map((p, i) => (i === index ? v : p)),
-                            )
-                          }
+                  <div
+                    className="prize-avatar-list"
+                    aria-label="Inferred opening prize cards"
+                  >
+                    {prizes.map((id, i) => {
+                      const c = mine.find((c) => c.id === id);
+                      return (
+                        <PrizeAvatar
+                          key={i}
+                          name={c?.name ?? "Unknown prize card"}
+                          printing={c?.printings?.[0]}
                         />
-                      ))}
-                    </div>
-                  </details>
-                  <details>
-                    <summary>Card backs</summary>
-                    <div className="form-grid">
-                      <RegexCombobox
-                        label="Your card back"
-                        value={cardBack}
-                        options={CARD_BACKS}
-                        onChange={setCardBack}
-                      />
-                      <RegexCombobox
-                        label="Opponent card back"
-                        value={opponentBack}
-                        options={CARD_BACKS}
-                        onChange={setOpponentBack}
-                      />
-                    </div>
-                  </details>
+                      );
+                    })}
+                  </div>
                   {!starter && (
                     <p className="field-hint">
                       The starter is missing from your selected deck. Choose the
@@ -408,16 +386,10 @@ export function MatchForm({
                     </p>
                   )}
                   {!result && (
-                    <RegexCombobox
-                      label="Result"
-                      value={result}
-                      options={[
-                        { value: "win", label: "Win" },
-                        { value: "loss", label: "Loss" },
-                        { value: "draw", label: "Draw" },
-                      ]}
-                      onChange={setResult}
-                    />
+                    <p className="field-hint">
+                      This log has no final result. Import the complete log or
+                      use Add manually.
+                    </p>
                   )}
                 </>
               )}
@@ -454,31 +426,51 @@ export function MatchForm({
                   Create your deck and an opponent deck in Decks first.
                 </p>
               )}
-              <div className="form-grid">
-                <RegexCombobox
-                  label="Result"
-                  options={[
-                    { value: "win", label: "Win" },
-                    { value: "loss", label: "Loss" },
-                    { value: "draw", label: "Draw" },
-                  ]}
-                  value={result}
-                  onChange={setResult}
-                />
-              </div>
-              <div className="form-grid">
-                <RegexCombobox
-                  label="Your prizes taken"
-                  options={numberOptions}
-                  value={String(myPrizes)}
-                  onChange={(v) => setMyPrizes(Number(v))}
-                />
-                <RegexCombobox
-                  label="Opponent prizes taken"
-                  options={numberOptions}
-                  value={String(theirPrizes)}
-                  onChange={(v) => setTheirPrizes(Number(v))}
-                />
+              <div className="match-scoreboard" aria-label="Match score">
+                <div>
+                  <strong>You</strong>
+                  <div className="score-options">
+                    {numberOptions.map((o) => (
+                      <Button
+                        type="button"
+                        key={o.value}
+                        aria-label={`Your prizes: ${o.value}`}
+                        aria-pressed={myPrizes === Number(o.value)}
+                        variant={
+                          myPrizes === Number(o.value) ? "default" : "outline"
+                        }
+                        onClick={() => setMyPrizes(Number(o.value))}
+                      >
+                        {o.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <strong className="match-score">
+                  {myPrizes}–{theirPrizes}
+                  <small>{inferredResult.toUpperCase()}</small>
+                </strong>
+                <div>
+                  <strong>Opponent</strong>
+                  <div className="score-options">
+                    {numberOptions.map((o) => (
+                      <Button
+                        type="button"
+                        key={o.value}
+                        aria-label={`Opponent prizes: ${o.value}`}
+                        aria-pressed={theirPrizes === Number(o.value)}
+                        variant={
+                          theirPrizes === Number(o.value)
+                            ? "default"
+                            : "outline"
+                        }
+                        onClick={() => setTheirPrizes(Number(o.value))}
+                      >
+                        {o.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="form-grid">
                 <div>
@@ -530,48 +522,81 @@ export function MatchForm({
                   Record up to six known prize cards. Unknown slots can be left
                   empty. Each selection uses one actual copy.
                 </p>
-                <div className="prize-grid">
-                  {prizes.map((value, index) => (
-                    <div key={index} className="prize-slot">
-                      <RegexCombobox
-                        label={`Prize ${index + 1}`}
-                        placeholder="Unknown prize card"
-                        disabled={!deckId}
-                        value={value}
-                        clearable
-                        options={mine.map((c) => {
-                          const used = prizes.filter(
-                            (p, i) => i !== index && p === c.id,
-                          ).length;
-                          return {
-                            value: c.id,
-                            label: c.name,
-                            description: `${c.quantity - used} of ${c.quantity} copies available`,
-                            disabled: used >= c.quantity,
-                          };
-                        })}
-                        onChange={(v) =>
+                <div className="prize-avatar-list">
+                  {prizes.map((id, i) => {
+                    const c = mine.find((c) => c.id === id);
+                    return id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        key={i}
+                        title={`Remove ${c?.name}`}
+                        aria-label={`Remove prize ${i + 1}: ${c?.name}`}
+                        onClick={() =>
                           setPrizes((ps) =>
-                            ps.map((p, i) => (i === index ? v : p)),
+                            ps.map((p, n) => (n === i ? "" : p)),
                           )
                         }
-                      />
-                      {value && (
-                        <button
-                          type="button"
-                          aria-label={`Clear prize ${index + 1}`}
-                          className="prize-clear"
-                          onClick={() =>
-                            setPrizes((ps) =>
-                              ps.map((p, i) => (i === index ? "" : p)),
-                            )
-                          }
-                        >
-                          <X size={13} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                      >
+                        <span className="manual-prize-avatar">
+                          {c?.printings?.[0]?.image_url ? (
+                            <img
+                              src={c.printings[0].image_url.replace(
+                                "/high.webp",
+                                "/low.webp",
+                              )}
+                              alt={c.name}
+                            />
+                          ) : (
+                            "?"
+                          )}
+                        </span>
+                      </Button>
+                    ) : (
+                      <span
+                        key={i}
+                        className="prize-avatar"
+                        title="Unknown prize card"
+                      >
+                        ?
+                      </span>
+                    );
+                  })}
+                </div>
+                <div className="manual-prize-deck">
+                  {sortedRoster(mine).map((c) => {
+                    const used = prizes.filter((p) => p === c.id).length;
+                    return (
+                      <button
+                        type="button"
+                        key={c.id}
+                        aria-label={`Add prize: ${c.name}`}
+                        disabled={selectedCount >= 6 || used >= c.quantity}
+                        onClick={() =>
+                          setPrizes((ps) => {
+                            const i = ps.indexOf("");
+                            return ps.map((p, n) => (n === i ? c.id : p));
+                          })
+                        }
+                      >
+                        {c.printings?.[0]?.image_url ? (
+                          <img
+                            src={c.printings[0].image_url.replace(
+                              "/high.webp",
+                              "/low.webp",
+                            )}
+                            alt={c.name}
+                          />
+                        ) : (
+                          <div className="printing-image-placeholder">
+                            {c.name}
+                          </div>
+                        )}
+                        <span>{c.name}</span>
+                        <strong>{c.quantity - used} available</strong>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               {match && (

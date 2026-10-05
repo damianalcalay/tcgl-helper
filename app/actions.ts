@@ -22,7 +22,7 @@ function text(value: unknown): value is string {
   return typeof value === "string" && value.length <= 50000;
 }
 function fail(error: unknown): ActionResult {
-  console.error("TCGL Helper mutation failed", error);
+  console.error("TCG Helper mutation failed", error);
   const e = error as { code?: string; message?: string };
   if (e.code === "22P02" && e.message?.includes("card_type"))
     return {

@@ -18,35 +18,35 @@ async function createCard(page: Page, name: string, type: string) {
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByText(name, { exact: true })).toBeVisible();
 }
+async function selectChoice(page: Page, label: string, option: string) {
+  await page.getByRole("button", { name: label, exact: true }).click();
+  await page.getByRole("menuitemradio", { name: option, exact: true }).click();
+}
 async function selectCardType(page: Page, label: string, type: string) {
-  const trainer = (
-    {
-      Item: "item",
-      Supporter: "supporter",
-      Stadium: "stadium",
-      "Pokémon Tool": "tool",
-    } as Record<string, string>
-  )[type];
-  await page
-    .getByLabel(`${label} category`, { exact: true })
-    .selectOption(trainer ? "Trainer" : "Pokemon");
-  if (trainer)
-    await page
-      .getByLabel(`${label} trainer type`, { exact: true })
-      .selectOption(trainer);
+  const trainer = ["Item", "Supporter", "Stadium", "Pokemon Tool"].includes(
+    type,
+  );
+  await selectChoice(
+    page,
+    label + " category",
+    trainer ? "Trainer" : "Pokemon",
+  );
+  if (trainer) await selectChoice(page, label + " trainer type", type);
   else {
-    await page
-      .getByLabel(`${label} stage`, { exact: true })
-      .selectOption(
-        type.startsWith("Stage 1")
-          ? "stage_1"
-          : type.startsWith("Stage 2")
-            ? "stage_2"
-            : "basic",
-      );
-    await page
-      .getByLabel(`${label} suffix`, { exact: true })
-      .selectOption(type.endsWith(" ex") ? "ex" : "");
+    await selectChoice(
+      page,
+      label + " stage",
+      type.startsWith("Stage 1")
+        ? "Stage1"
+        : type.startsWith("Stage 2")
+          ? "Stage2"
+          : "Basic",
+    );
+    await selectChoice(
+      page,
+      label + " suffix",
+      type.endsWith(" ex") ? "ex" : "None",
+    );
   }
 }
 async function createDeck(page: Page, name: string, quantity: number) {
@@ -185,7 +185,6 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await first.click();
   await second.click();
   await second.click();
-  await choose(page, "Game result", "Win");
   await page
     .getByRole("button", { name: "Add Match", exact: true })
     .first()
@@ -197,17 +196,18 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
     page.getByRole("combobox", { name: "Your deck", exact: true }),
   ).toContainText("Deck Alpha");
   await expect(
-    page.getByRole("combobox", { name: "Result", exact: true }),
-  ).toContainText("Win");
+    page.getByRole("button", { name: "Remove prize 1: Test Basic" }),
+  ).toBeVisible();
   await expect(
-    page.getByRole("combobox", { name: "Prize 1", exact: true }),
-  ).toContainText("Test Basic");
-  await expect(
-    page.getByRole("combobox", { name: "Prize 2", exact: true }),
-  ).toContainText("Test Basic");
+    page.getByRole("button", { name: "Remove prize 2: Test Basic" }),
+  ).toBeVisible();
   await choose(page, "Opponent deck", "Deck Beta");
-  await choose(page, "Your prizes taken", "6");
-  await choose(page, "Opponent prizes taken", "3");
+  await page
+    .getByRole("button", { name: "Your prizes: 6", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Opponent prizes: 3", exact: true })
+    .click();
   await page
     .getByRole("combobox", { name: "Your starter Pokémon", exact: true })
     .click();
@@ -217,17 +217,20 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   ).toHaveCount(0);
   await page.getByRole("option", { name: /^Test Basic/ }).click();
   await choose(page, "Opponent starter Pokémon", "Test Basic");
-  await choose(page, "Prize 1", "Test Basic");
-  await choose(page, "Prize 2", "Test Basic");
-  await page.getByRole("combobox", { name: "Prize 3", exact: true }).click();
   await expect(
-    page.getByRole("option", {
-      name: "Test Basic 0 of 2 copies available",
-      exact: true,
-    }),
+    page.getByRole("button", { name: "Add prize: Test Basic", exact: true }),
   ).toBeDisabled();
-  await page.locator(".combo-search").getByRole("searchbox").press("Escape");
-  for (let i = 3; i <= 6; i++) await choose(page, `Prize ${i}`, "Test Item");
+  await page
+    .getByRole("button", { name: "Remove prize 2: Test Basic" })
+    .click();
+  await page.getByRole("button", { name: "Add prize: Test Basic" }).click();
+  for (let i = 0; i < 4; i++)
+    await page
+      .getByRole("button", { name: "Add prize: Test Item", exact: true })
+      .click();
+  await expect(
+    page.getByRole("button", { name: "Add prize: Test Item", exact: true }),
+  ).toBeDisabled();
   await page.getByRole("button", { name: "Save match", exact: true }).click();
   await page
     .getByRole("dialog", { name: "Match saved!" })
@@ -245,17 +248,36 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await expect(
     page.getByRole("heading", { name: "Match history", exact: true }),
   ).toBeVisible();
+  const matchRow = page.locator(".match-row").first();
+  await expect(matchRow).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".match-expanded-details")).toHaveCount(0);
+  await matchRow.click();
+  await expect(matchRow).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator(".match-expanded-details")).toContainText(
+    "Opening prize cards",
+  );
+  await page.locator(".match-expanded-details .prize-avatar").first().click();
+  await expect(page.locator(".card-inspection")).toBeVisible();
+  await page
+    .getByRole("dialog")
+    .last()
+    .getByRole("button", { name: "Close dialog" })
+    .click();
+  await matchRow.press("Enter");
+  await expect(matchRow).toHaveAttribute("aria-expanded", "false");
   await page.getByRole("button", { name: "Edit match", exact: true }).click();
-  await choose(page, "Result", "Draw");
+  await page
+    .getByRole("button", { name: "Opponent prizes: 6", exact: true })
+    .click();
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.locator(".result-draw")).toHaveText("draw");
+  await expect(page.locator(".match-row-draw")).toBeVisible();
   await expect(page.getByText("0.0%", { exact: true }).first()).toBeVisible();
   await choose(page, "Entries per page", "All");
   await expect(page.getByText("Showing 1–1 of 1 matches")).toBeVisible();
   await page.getByRole("button", { name: "Delete match", exact: true }).click();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.locator(".result-draw")).toBeVisible();
+  await expect(page.locator(".match-row-draw")).toBeVisible();
   await page
     .getByRole("button", { name: "Collapse sidebar", exact: true })
     .click();
@@ -531,7 +553,7 @@ test("imports a deck, creates missing cards and saves thirteen Energy copies", a
   await selectCardType(page, "Type for Imported Ultra Ball", "Item");
   await expect(
     page.getByLabel("Type for Imported Grass Energy energy type"),
-  ).toHaveValue("energy_basic");
+  ).toContainText("Normal (Basic)");
   await page
     .getByRole("button", { name: "Create deck", exact: true })
     .last()
@@ -750,10 +772,10 @@ test("combat log inference, perspective correction, full-screen save and board r
     .fill("Opponent Hydrapple");
   await dialog.getByRole("button", { name: "Import combat log" }).click();
   await expect(
-    dialog.getByRole("combobox", { name: "Your player", exact: true }),
+    dialog.getByRole("button", { name: "Your player", exact: true }),
   ).toContainText("Ciberbrian");
   await expect(dialog.locator(".import-match-summary")).toContainText("WIN");
-  await choose(page, "Your player", "bastorz");
+  await selectChoice(page, "Your player", "bastorz");
   await expect(dialog.locator(".import-match-summary")).toContainText("LOSS");
   await expect(dialog.locator(".import-match-summary")).toContainText(
     "2" + String.fromCharCode(8211) + "6 prizes taken",
@@ -764,7 +786,12 @@ test("combat log inference, perspective correction, full-screen save and board r
   await expect(dialog.locator(".import-match-summary")).toContainText(
     "Starter: Applin",
   );
-  await expect(dialog.locator("summary").first()).toContainText("6 unknown");
+  await expect(
+    dialog.getByLabel("Inferred opening prize cards").locator(".prize-avatar"),
+  ).toHaveCount(6);
+  await expect(
+    dialog.getByRole("combobox", { name: "Prize 1", exact: true }),
+  ).toHaveCount(0);
   await dialog.getByRole("button", { name: "Save match", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.locator(".notebook-workspace")).toHaveClass(
@@ -779,7 +806,7 @@ test("combat log inference, perspective correction, full-screen save and board r
   );
   await page.goto("/stats");
   await expect(
-    page.getByText("Opening coin win rate", { exact: true }),
+    page.getByText("Start first rate", { exact: true }),
   ).toBeVisible();
   const row = page
     .getByRole("row")
@@ -792,11 +819,32 @@ test("combat log inference, perspective correction, full-screen save and board r
     page.getByText("- Ciberbrian discarded 2 cards.", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Board replay", exact: true }).click();
+  const replay = page.getByRole("dialog", { name: "Combat log" });
+  await expect
+    .poll(() => replay.evaluate((el) => el.scrollHeight <= el.clientHeight + 1))
+    .toBe(true);
   await page.getByLabel("Replay action", { exact: true }).fill("14");
   await expect(page.locator(".replay-board")).toBeVisible();
+  await expect(page.locator(".replay-action-bubble")).toContainText("bastorz");
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect
+    .poll(() => replay.evaluate((el) => el.scrollHeight <= el.clientHeight + 1))
+    .toBe(true);
+  await expect
+    .poll(() =>
+      page
+        .locator(".replay-controls")
+        .evaluate(
+          (el) => el.getBoundingClientRect().bottom <= window.innerHeight,
+        ),
+    )
+    .toBe(true);
+  await page.screenshot({ path: "test-results/combat-replay-720.png" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
   await page.getByRole("button", { name: "Next action" }).click();
   await page.getByRole("button", { name: "Previous action" }).click();
-  await page.getByLabel("Replay speed").selectOption("2");
+  await selectChoice(page, "Replay speed", "x2");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await page
     .getByRole("button", { name: "View Ciberbrian discard pile" })

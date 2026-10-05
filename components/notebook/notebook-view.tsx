@@ -50,7 +50,7 @@ export function NotebookView({ data }: { data: AppData }) {
   const [copies, setCopies] = useState<Record<string, State>>({});
   const [savedId, setSavedId] = useState<string | null>(null);
   const [reset, setReset] = useState(false);
-  const [result, setResult] = useState<Result | "">("");
+
   const [matchForm, setMatchForm] = useState<{
     deck_id: string;
     result: Result | "";
@@ -92,7 +92,6 @@ export function NotebookView({ data }: { data: AppData }) {
   });
   function choose(id: string) {
     setDeckId(id);
-    setResult("");
     setMatchMessage("");
     setMatchError("");
     setVisibleIds(null);
@@ -112,7 +111,7 @@ export function NotebookView({ data }: { data: AppData }) {
     }
     setMatchError("");
     setMatchMessage("");
-    setMatchForm({ deck_id: deckId, result, prizes });
+    setMatchForm({ deck_id: deckId, result: "", prizes });
   }
   return (
     <div
@@ -194,46 +193,6 @@ export function NotebookView({ data }: { data: AppData }) {
               ))}
             </div>
           </div>
-          <section className="panel notebook-match-panel">
-            <div>
-              <h3>Record this game</h3>
-              <p className="field-hint">
-                Choose your result and add this match directly to Stats.
-              </p>
-            </div>
-            <RegexCombobox
-              label="Game result"
-              placeholder="Win, Draw, or Loss"
-              options={[
-                { value: "win", label: "Win" },
-                { value: "draw", label: "Draw" },
-                { value: "loss", label: "Loss" },
-              ]}
-              value={result}
-              onChange={(value) => {
-                setResult(value as Result);
-                setMatchError("");
-                setMatchMessage("");
-              }}
-            />
-            <Button onClick={addMatch}>
-              <Plus />
-              Add Match
-            </Button>
-            {matchError && (
-              <p role="alert" className="error-message notebook-match-feedback">
-                {matchError}
-              </p>
-            )}
-            {matchMessage && (
-              <p role="status" className="notebook-match-feedback text-primary">
-                {matchMessage}{" "}
-                <Link href="/stats" className="underline">
-                  View Stats
-                </Link>
-              </p>
-            )}
-          </section>
           <div className="notebook-grid">
             <div className="game-mode-toolbar">
               <strong>{deck.name}</strong>
@@ -242,6 +201,12 @@ export function NotebookView({ data }: { data: AppData }) {
               </Button>
             </div>
             <section className="panel notebook-prizes" aria-label="Prize cards">
+              {matchError && (
+                <p role="alert" className="error-message">
+                  {matchError}
+                </p>
+              )}
+              {matchMessage && <p role="status">{matchMessage}</p>}
               <div className="panel-heading">
                 <div>
                   <h2>Prize cards</h2>
@@ -496,7 +461,6 @@ export function NotebookView({ data }: { data: AppData }) {
                 Object.entries(cs).filter(([k]) => !k.startsWith(`${deckId}:`)),
               ),
             );
-            setResult("");
             setMatchError("");
             setMatchMessage("");
             setSavedId(null);
@@ -516,7 +480,6 @@ export function NotebookView({ data }: { data: AppData }) {
               ),
             );
             setReset(false);
-            setResult("");
             setMatchError("");
             setMatchMessage("");
           }}

@@ -31,13 +31,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-shell" data-collapsed={collapsed}>
       <aside className="sidebar">
-        <Link href="/decks" className="brand" aria-label="TCGL Helper home">
+        <Link href="/decks" className="brand" aria-label="TCG Helper home">
           <span className="brand-mark">
             <Layers3 size={23} />
           </span>
           {!collapsed && (
             <span>
-              TCGL{" "}
+              TCG{" "}
               <span className="font-normal text-muted-foreground">Helper</span>
             </span>
           )}
@@ -118,13 +118,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             Workspace <span className="mx-3 text-border">/</span>
           </span>
           <span>
-            {links.find((l) => l.href === path)?.name ?? "TCGL Helper"}
+            {links.find((l) => l.href === path)?.name ?? "TCG Helper"}
           </span>
-          <span className="ml-auto topbar-tag">TCGL HELPER</span>
+          <span className="ml-auto topbar-tag">TCG HELPER</span>
         </header>
         <main className="page-content">{children}</main>
         <footer className="page-footer">
-          TCGL Helper <span>Built for a clearer game.</span>
+          TCG Helper <span>Built for a clearer game.</span>
         </footer>
       </div>
     </div>

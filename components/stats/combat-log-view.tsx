@@ -5,6 +5,7 @@ import { AppData, CardPrinting, Match } from "@/types/domain";
 import { cardNameKey, parseCombatLog } from "@/lib/domain/combat-log";
 import { InPlay, replayBoard } from "@/lib/domain/combat-replay";
 import { Modal } from "@/components/shared/modal";
+import { ChoiceSelect } from "@/components/shared/choice-select";
 import { RegexCombobox } from "@/components/shared/regex-combobox";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
@@ -189,6 +190,7 @@ export function CombatLogView({
             : undefined
         }
         key={card.id}
+        title={card.name}
       >
         <ReplayImage
           key={card.name}
@@ -319,6 +321,9 @@ export function CombatLogView({
   return (
     <Modal
       wide
+      className={
+        view === "replay" ? "combat-replay-modal" : "combat-timeline-modal"
+      }
       title={match.combat_log ? "Combat log" : "Match review"}
       description={`${match.deck_name} vs ${match.opponent_deck_name}`}
       onClose={onClose}
@@ -332,14 +337,37 @@ export function CombatLogView({
         <span>
           You: {own || "Unknown"} · Opponent: {opponent || "Unknown"}
         </span>
-        {parsed?.coin && (
-          <span>
-            Opening coin: {parsed.coin.chooser} chose {parsed.coin.choice};
-            outcome {parsed.coin.outcome ?? "unknown"}. Winner:{" "}
-            {parsed.coin.winner ?? "unknown"}.
-          </span>
-        )}
+        <span>
+          {parsed?.coin?.first
+            ? parsed.coin.first === own
+              ? "Start first"
+              : "Start second"
+            : "Start order unknown"}{" "}
+          · Coin selection:{" "}
+          {parsed?.coin?.chooser
+            ? (parsed.coin.chooser === own ? "You" : "Opponent") +
+              " chose " +
+              parsed.coin.choice
+            : "Unknown"}{" "}
+          · Coin result: {parsed?.coin?.outcome ?? "Unknown"}
+        </span>
       </div>
+      {view === "replay" && (
+        <div className="replay-back-options">
+          <RegexCombobox
+            label="Your card back"
+            value={ownBack}
+            options={CARD_BACKS}
+            onChange={setOwnBack}
+          />
+          <RegexCombobox
+            label="Opponent card back"
+            value={otherBack}
+            options={CARD_BACKS}
+            onChange={setOtherBack}
+          />
+        </div>
+      )}
       {!parsed && (
         <div className="combat-match-summary">
           <strong>Opening prize cards</strong>
@@ -422,20 +450,6 @@ export function CombatLogView({
         </div>
       ) : (
         <>
-          <div className="replay-back-options">
-            <RegexCombobox
-              label="Your card back"
-              value={ownBack}
-              options={CARD_BACKS}
-              onChange={setOwnBack}
-            />
-            <RegexCombobox
-              label="Opponent card back"
-              value={otherBack}
-              options={CARD_BACKS}
-              onChange={setOtherBack}
-            />
-          </div>
           <div className="replay-board">
             {side(opponent, true)}
             {side(own, false)}
@@ -579,20 +593,15 @@ export function CombatLogView({
             >
               <ChevronRight />
             </Button>
-            <label>
-              Speed
-              <select
-                aria-label="Replay speed"
-                value={speed}
-                onChange={(e) => setSpeed(e.target.value)}
-              >
-                {["0.5", "1", "1.5", "2", "4"].map((s) => (
-                  <option key={s} value={s}>
-                    ×{s}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ChoiceSelect
+              label="Replay speed"
+              value={speed}
+              onChange={setSpeed}
+              options={["0.5", "1", "1.5", "2", "4"].map((s) => ({
+                value: s,
+                label: "x" + s,
+              }))}
+            />
             <span>
               {step + 1} / {events.length}
             </span>

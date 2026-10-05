@@ -1,6 +1,7 @@
 "use client";
 import { Fragment, useState } from "react";
 import { AppData, Match } from "@/types/domain";
+import { parseCombatLog } from "@/lib/domain/combat-log";
 import { overallStats, summarize, winRate } from "@/lib/domain/logic";
 import { deleteEntity } from "@/app/actions";
 import {
@@ -27,8 +28,17 @@ export function StatsView({ data }: { data: AppData }) {
   const [form, setForm] = useState<Match | null | undefined>();
   const [deleting, setDeleting] = useState<Match | null>(null);
   const overall = overallStats(data.matches);
-  const coinGames = data.matches.filter((m) => typeof m.coin_won === "boolean");
-  const coinWins = coinGames.filter((m) => m.coin_won).length;
+  const startGames = data.matches.flatMap((m) => {
+    try {
+      const log = parseCombatLog(m.combat_log ?? "");
+      return log.coin?.first && m.log_player
+        ? [log.coin.first === m.log_player]
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  const firstGames = startGames.filter(Boolean).length;
   const mutation = useMutation();
   const decks = data.decks.filter((d) =>
     data.matches.some((m) => m.deck_id === d.id),
@@ -102,13 +112,13 @@ export function StatsView({ data }: { data: AppData }) {
               icon={Layers3}
             />
             <Metric
-              label="Opening coin win rate"
+              label="Start first rate"
               value={
-                coinGames.length
-                  ? `${((coinWins / coinGames.length) * 100).toFixed(1)}%`
+                startGames.length
+                  ? `${((firstGames / startGames.length) * 100).toFixed(1)}%`
                   : "N/A"
               }
-              detail={`${coinWins} wins from ${coinGames.length} recorded opening flips`}
+              detail={`${firstGames} starts first from ${startGames.length} matches with known start order`}
               icon={Target}
             />
           </div>

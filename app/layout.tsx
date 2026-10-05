@@ -3,7 +3,7 @@ import { ThemeProvider } from "next-themes";
 import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: "TCGL Helper",
+  title: "TCG Helper",
   description:
     "Your decks, game notebook, and match insights for Pokémon TCG Live.",
 };

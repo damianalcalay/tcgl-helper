@@ -1,4 +1,4 @@
-# TCGL Helper
+# TCG Helper
 
 A desktop-first Pokémon TCG Live companion built with Next.js App Router, React, strict TypeScript, Tailwind CSS, shadcn/ui primitives, Lucide icons and Supabase. All interface labels and messages are in English. No demo cards or decks are seeded.
 

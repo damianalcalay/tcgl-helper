@@ -10,6 +10,7 @@ export function Modal({
   wide = false,
   busy = false,
   closeOnBackdrop = true,
+  className = "",
 }: {
   title: string;
   description?: string;
@@ -18,6 +19,7 @@ export function Modal({
   wide?: boolean;
   busy?: boolean;
   closeOnBackdrop?: boolean;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -28,7 +30,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className={`modal ${wide ? "modal-wide" : ""}`}
+      className={`modal ${wide ? "modal-wide" : ""} ${className}`}
       onCancel={(e) => {
         e.preventDefault();
         if (!busy) onClose();

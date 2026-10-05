@@ -1,4 +1,6 @@
 "use client";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ChoiceSelect } from "@/components/shared/choice-select";
 import {
   TCGDEX_STAGES,
   TCGDEX_SUFFIXES,
@@ -32,109 +34,86 @@ export function CardTypeSelector({
   const suffix = stage ? legacy.slice(stage.length + 1) : "";
   return (
     <div className="form-stack card-type-fields">
-      <label className="field-label">
-        {label} · Category
-        <select
-          aria-label={`${label} category`}
-          value={category}
-          onChange={(e) =>
-            onChange(
-              (
-                {
-                  Pokemon: "basic",
-                  Trainer: "item",
-                  Energy: "energy_basic",
-                } as const
-              )[e.target.value as "Pokemon"],
-            )
-          }
-        >
-          <option value="" disabled>
-            Choose category
-          </option>
-          {["Pokemon", "Trainer", "Energy"].map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
-      </label>
+      <ChoiceSelect
+        label={label + " category"}
+        value={category}
+        placeholder="Choose category"
+        options={["Pokemon", "Trainer", "Energy"].map((c) => ({
+          value: c,
+          label: c,
+        }))}
+        onChange={(v) =>
+          onChange(
+            (
+              {
+                Pokemon: "basic",
+                Trainer: "item",
+                Energy: "energy_basic",
+              } as const
+            )[v as "Pokemon"],
+          )
+        }
+      />
       {category === "Pokemon" && (
         <>
-          <label className="field-label">
-            Stage
-            <select
-              aria-label={`${label} stage`}
-              value={stage}
-              onChange={(e) =>
-                onChange(
-                  `${e.target.value}${suffix ? `_${suffix}` : ""}` as CardType,
-                )
-              }
-            >
-              {Object.entries(TCGDEX_STAGES).map(([key, name]) => (
-                <option key={key} value={key}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field-label">
-            Suffix
-            <select
-              aria-label={`${label} suffix`}
-              value={suffix}
-              onChange={(e) =>
-                onChange(
-                  `${stage}${e.target.value ? `_${e.target.value}` : ""}` as CardType,
-                )
-              }
-            >
-              <option value="">None</option>
-              {Object.entries(TCGDEX_SUFFIXES).map(([key, name]) => (
-                <option key={key} value={key}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ChoiceSelect
+            label={label + " stage"}
+            value={stage}
+            options={Object.entries(TCGDEX_STAGES).map(([value, label]) => ({
+              value,
+              label,
+            }))}
+            onChange={(v) =>
+              onChange((v + (suffix ? "_" + suffix : "")) as CardType)
+            }
+          />
+          <ChoiceSelect
+            label={label + " suffix"}
+            value={suffix}
+            options={[
+              { value: "", label: "None" },
+              ...Object.entries(TCGDEX_SUFFIXES).map(([value, label]) => ({
+                value,
+                label,
+              })),
+            ]}
+            onChange={(v) => onChange((stage + (v ? "_" + v : "")) as CardType)}
+          />
         </>
       )}
       {category === "Trainer" && (
-        <div className="field-label">
-          Trainer type
-          <select
-            aria-label={`${label} trainer type`}
+        <>
+          <ChoiceSelect
+            label={label + " trainer type"}
             value={value === "ace_spec" ? "item" : value}
-            onChange={(e) => onChange(e.target.value as CardType)}
-          >
-            {Object.entries(TCGDEX_TRAINERS).map(([key, name]) => (
-              <option key={key} value={key}>
-                {name}
-              </option>
-            ))}
-          </select>
-          <label>
-            <input
-              type="checkbox"
-              aria-label={`${label} ACE SPEC`}
+            options={Object.entries(TCGDEX_TRAINERS).map(([value, label]) => ({
+              value,
+              label,
+            }))}
+            onChange={(v) => onChange(v as CardType)}
+          />
+          <label className="flex items-center gap-2">
+            <Checkbox
+              aria-label={label + " ACE SPEC"}
               checked={value === "ace_spec"}
-              onChange={(e) => onChange(e.target.checked ? "ace_spec" : "item")}
-            />{" "}
+              onCheckedChange={(checked) =>
+                onChange(checked ? "ace_spec" : "item")
+              }
+            />
             ACE SPEC rarity
           </label>
-        </div>
+        </>
       )}
       {category === "Energy" && (
-        <label className="field-label">
-          Energy type
-          <select
-            aria-label={`${label} energy type`}
-            value={value === "energy" ? "energy_basic" : value}
-            onChange={(e) => onChange(e.target.value as CardType)}
-          >
-            <option value="energy_basic">Normal (Basic)</option>
-            <option value="energy_special">Special</option>
-          </select>
-        </label>
+        <ChoiceSelect
+          label={label + " energy type"}
+          value={value === "energy" ? "energy_basic" : value}
+          options={[
+            { value: "energy_basic", label: "Normal (Basic)" },
+            { value: "energy_special", label: "Special" },
+          ]}
+          onChange={(v) => onChange(v as CardType)}
+        />
       )}
     </div>
   );

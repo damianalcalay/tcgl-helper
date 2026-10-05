@@ -18,7 +18,7 @@ export function DataNotice({
       </h1>
       <p>
         {setup
-          ? "TCGL Helper is ready for your Supabase project. Add your public project URL and publishable key to .env.local, then run supabase/schema.sql in the Supabase SQL Editor."
+          ? "TCG Helper is ready for your Supabase project. Add your public project URL and publishable key to .env.local, then run supabase/schema.sql in the Supabase SQL Editor."
           : error}
       </p>
       {setup ? (
