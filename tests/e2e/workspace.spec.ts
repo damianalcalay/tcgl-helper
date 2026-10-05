@@ -827,6 +827,22 @@ test("combat log inference, perspective correction, full-screen save and board r
   await expect(page.locator(".replay-board")).toBeVisible();
   await expect(page.locator(".replay-action-bubble")).toContainText("bastorz");
   await page.setViewportSize({ width: 1280, height: 720 });
+  await page.getByRole("button", { name: "Switch replay color theme" }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.getByRole("button", { name: "Switch replay color theme" }).click();
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+  await expect(
+    page.locator(".replay-controls").getByText("Replay speed", { exact: true }),
+  ).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.locator(".replay-action-bubble").evaluate((el) => {
+        const b = el.getBoundingClientRect();
+        const p = el.parentElement!.getBoundingClientRect();
+        return Math.abs(b.left + b.width / 2 - (p.left + p.width / 2)) < 2;
+      }),
+    )
+    .toBe(true);
   await expect
     .poll(() => replay.evaluate((el) => el.scrollHeight <= el.clientHeight + 1))
     .toBe(true);

@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element -- Small cached TCGdex thumbnails and a local card back. */
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { useTheme } from "next-themes";
 import { AppData, CardPrinting, Match } from "@/types/domain";
 import { cardNameKey, parseCombatLog } from "@/lib/domain/combat-log";
 import { InPlay, replayBoard } from "@/lib/domain/combat-replay";
@@ -8,7 +9,14 @@ import { Modal } from "@/components/shared/modal";
 import { ChoiceSelect } from "@/components/shared/choice-select";
 import { RegexCombobox } from "@/components/shared/regex-combobox";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Pause,
+  Play,
+  Sun,
+  Moon,
+} from "lucide-react";
 
 export const CARD_BACKS = [
   { value: "classic", label: "Classic Pokémon" },
@@ -100,6 +108,21 @@ function energySymbol(name: string) {
   ];
   return types.find((t) => name.includes(t)) ?? "Special";
 }
+function EnergyIcon({ name, src }: { name: string; src?: string }) {
+  const [failed, setFailed] = useState(false);
+  return src && !failed ? (
+    <img
+      className={
+        name.startsWith("Basic ") ? "energy-art-crop" : "energy-special-art"
+      }
+      alt={name}
+      src={src}
+      onError={() => setFailed(true)}
+    />
+  ) : (
+    <span aria-label={`${name}: image unavailable`}>?</span>
+  );
+}
 function animateFromBoardCenter(node: HTMLDivElement | null) {
   if (!node) return;
   const board = node.closest(".replay-board");
@@ -126,6 +149,7 @@ export function CombatLogView({
   data: AppData;
   onClose: () => void;
 }) {
+  const { resolvedTheme, setTheme } = useTheme();
   const parsed = useMemo(() => {
     try {
       return parseCombatLog(match.combat_log ?? "");
@@ -216,7 +240,7 @@ export function CombatLogView({
                 if (e.key === "Enter") inspect(name);
               }}
             >
-              {energySymbol(name).slice(0, 1)}
+              <EnergyIcon name={name} src={image(name)} />
             </span>
           ))}
         </div>
@@ -394,6 +418,14 @@ export function CombatLogView({
         </div>
       )}
       <div className="combat-view-tabs">
+        <Button
+          variant="outline"
+          aria-label="Switch replay color theme"
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+        >
+          {resolvedTheme === "dark" ? <Sun /> : <Moon />}
+          <span>{resolvedTheme === "dark" ? "Day mode" : "Night mode"}</span>
+        </Button>
         <Button
           variant={view === "timeline" ? "default" : "outline"}
           onClick={() => {
@@ -595,6 +627,7 @@ export function CombatLogView({
             </Button>
             <ChoiceSelect
               label="Replay speed"
+              hideLabel
               value={speed}
               onChange={setSpeed}
               options={["0.5", "1", "1.5", "2", "4"].map((s) => ({

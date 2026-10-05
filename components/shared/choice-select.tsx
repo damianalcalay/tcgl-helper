@@ -15,6 +15,7 @@ export function ChoiceSelect({
   onChange,
   placeholder = "Choose",
   disabled = false,
+  hideLabel = false,
 }: {
   label: string;
   value: string;
@@ -22,10 +23,11 @@ export function ChoiceSelect({
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  hideLabel?: boolean;
 }) {
   return (
     <div className="field-label">
-      <span>{label}</span>
+      {!hideLabel && <span>{label}</span>}
       <Menu.Root modal={false}>
         <Menu.Trigger asChild>
           <Button
