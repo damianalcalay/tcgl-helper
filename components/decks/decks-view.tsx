@@ -1,4 +1,5 @@
 "use client";
+import { PrintingImages } from "@/components/decks/printing-images";
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -242,12 +243,14 @@ export function DecksView({ data }: { data: AppData }) {
                   Edit deck
                 </Button>
               </div>
-              <div className="deck-reference-image">
-                <DeckImageViewer
-                  url={selected.image_url}
-                  name={selected.name}
-                />
-              </div>
+              {selected.image_url && (
+                <div className="deck-reference-image">
+                  <DeckImageViewer
+                    url={selected.image_url}
+                    name={selected.name}
+                  />
+                </div>
+              )}
               <div className="detail-grid">
                 <div>
                   <h3 className="subheading">
@@ -265,6 +268,12 @@ export function DecksView({ data }: { data: AppData }) {
                     <div className="deck-roster-grid">
                       {deckRoster(data, selected.id).map((c) => (
                         <div className="list-row" key={c.id}>
+                          {c.printings?.length ? (
+                            <PrintingImages
+                              printings={c.printings}
+                              name={c.name}
+                            />
+                          ) : null}
                           <span className="quantity-badge">x{c.quantity}</span>
                           <span className="flex-1">{c.name}</span>
                           <span className="type-label">
@@ -426,7 +435,11 @@ export function DecksView({ data }: { data: AppData }) {
       {deleting && (
         <ConfirmDialog
           title={`Delete ${deleting.type}?`}
-          description={`“${deleting.name}” will be permanently deleted. Records used by a deck or match cannot be deleted until those references are removed.`}
+          description={
+            deleting.type === "deck"
+              ? `“${deleting.name}” and all ${data.matches.filter((m) => m.deck_id === deleting.id || m.opponent_deck_id === deleting.id).length} matches involving this deck (including as an opponent), their card records and prizes will be permanently deleted.`
+              : `“${deleting.name}” will be permanently deleted. Cards used by a deck or match cannot be deleted until those references are removed.`
+          }
           onClose={() => setDeleting(null)}
           onConfirm={remove}
           pending={mutation.pending}

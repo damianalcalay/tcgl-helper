@@ -21,6 +21,11 @@ import { PageHeader, EmptyState } from "@/components/shared/page-parts";
 import { MatchForm } from "@/components/stats/match-form";
 import { TrackerSearch } from "./tracker-search";
 import { DeckImageViewer } from "@/components/decks/deck-image-viewer";
+import {
+  PrintingImages,
+  PrizeThumbnail,
+} from "@/components/decks/printing-images";
+import { resizePrintings } from "@/lib/domain/deck-import";
 type State = 0 | 1 | 2;
 const states = ["Available", "Discard pile", "Prizes"] as const;
 export function NotebookView({ data }: { data: AppData }) {
@@ -39,6 +44,29 @@ export function NotebookView({ data }: { data: AppData }) {
   const [visibleIds, setVisibleIds] = useState<string[] | null>(null);
   const deck = data.decks.find((d) => d.id === deckId);
   const roster = deckRoster(data, deckId);
+  const trackerRows = roster.flatMap((c) => {
+    const printings = resizePrintings(c.printings, c.quantity);
+    if (!printings.length) return [{ ...c, offset: 0 }];
+    let offset = 0;
+    return printings.map((printing) => {
+      const row = {
+        ...c,
+        quantity: printing.quantity,
+        printings: [printing],
+        offset,
+      };
+      offset += printing.quantity;
+      return row;
+    });
+  });
+  const prizeCopies = trackerRows.flatMap((c) =>
+    Array.from({ length: c.quantity }, (_, i) => ({
+      key: `${deckId}:${c.id}:${c.offset + i}`,
+      name: c.name,
+      copyNumber: c.offset + i + 1,
+      printing: c.printings?.[0],
+    })).filter((copy) => copies[copy.key] === 2),
+  );
   const total = roster.reduce((s, c) => s + c.quantity, 0);
   const counts = [0, 0, 0];
   roster.forEach((c) => {
@@ -147,6 +175,35 @@ export function NotebookView({ data }: { data: AppData }) {
               ))}
             </div>
           </div>
+          <section className="panel notebook-prizes" aria-label="Prize cards">
+            <div className="panel-heading">
+              <div>
+                <h2>Prize cards</h2>
+                <p>Click a card to return that copy to Available.</p>
+              </div>
+              <span className="count-pill" aria-live="polite">
+                {prizeCopies.length} / 6 prizes
+              </span>
+            </div>
+            {prizeCopies.length ? (
+              <div className="prize-card-list">
+                {prizeCopies.map((copy) => (
+                  <PrizeThumbnail
+                    key={copy.key}
+                    name={copy.name}
+                    printing={copy.printing}
+                    copyNumber={copy.copyNumber}
+                    onRemove={() => {
+                      setCopies((current) => ({ ...current, [copy.key]: 0 }));
+                      setMatchError("");
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="inline-empty">No copies marked as Prizes yet.</p>
+            )}
+          </section>
           <section className="panel notebook-match-panel">
             <div>
               <h3>Record this game</h3>
@@ -187,9 +244,11 @@ export function NotebookView({ data }: { data: AppData }) {
               </p>
             )}
           </section>
-          <section className="panel deck-reference-image">
-            <DeckImageViewer url={deck.image_url} name={deck.name} />
-          </section>
+          {deck.image_url && (
+            <section className="panel deck-reference-image">
+              <DeckImageViewer url={deck.image_url} name={deck.name} />
+            </section>
+          )}
           <div className="notebook-grid">
             <section className="panel tracker-panel">
               <div className="panel-heading">
@@ -226,12 +285,13 @@ export function NotebookView({ data }: { data: AppData }) {
                         No cards match your search.
                       </div>
                     )}
-                  {roster
+                  {trackerRows
                     .filter(
                       (c) => visibleIds === null || visibleIds.includes(c.id),
                     )
                     .map((c) => (
-                      <div className="tracker-row" key={c.id}>
+                      <div className="tracker-row" key={`${c.id}:${c.offset}`}>
+                        <PrintingImages printings={c.printings} name={c.name} />
                         <span className="quantity-badge">x{c.quantity}</span>
                         <div className="tracker-card-name">
                           <strong>{c.name}</strong>
@@ -239,7 +299,8 @@ export function NotebookView({ data }: { data: AppData }) {
                         </div>
                         <div className="copy-controls">
                           {Array.from({ length: c.quantity }, (_, i) => {
-                            const key = `${deckId}:${c.id}:${i}`;
+                            const copyNumber = c.offset + i;
+                            const key = `${deckId}:${c.id}:${copyNumber}`;
                             const state = copies[key] ?? 0;
                             return (
                               <button
@@ -251,10 +312,10 @@ export function NotebookView({ data }: { data: AppData }) {
                                     [key]: ((state + 1) % 3) as State,
                                   }))
                                 }
-                                title={`${c.name} · Copy ${i + 1}: ${states[state]}. Click for ${states[(state + 1) % 3]}.`}
-                                aria-label={`${c.name} copy ${i + 1}: ${states[state]}. Change to ${states[(state + 1) % 3]}.`}
+                                title={`${c.name} · Copy ${copyNumber + 1}: ${states[state]}. Click for ${states[(state + 1) % 3]}.`}
+                                aria-label={`${c.name} copy ${copyNumber + 1}: ${states[state]}. Change to ${states[(state + 1) % 3]}.`}
                               >
-                                <span>{i + 1}</span>
+                                <span>{copyNumber + 1}</span>
                               </button>
                             );
                           })}

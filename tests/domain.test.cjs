@@ -14,7 +14,11 @@ function load(file, dependencies = {}) {
   vm.runInNewContext(compiled, {
     module: testModule,
     exports: testModule.exports,
-    require: (name) => dependencies[name] ?? require(name),
+    require: (name) =>
+      dependencies[name] ??
+      (name === "@/lib/domain/deck-import"
+        ? load("lib/domain/deck-import.ts")
+        : require(name)),
     Map,
     Set,
     Date,
@@ -199,6 +203,48 @@ test("RESTRICT deletion and missing-record errors become friendly messages", asy
   assert.doesNotMatch(result.error, /constraint/);
 });
 
+test("imported images cannot silently disappear when Supabase is missing the migration", async () => {
+  const uuid = "10000000-0000-4000-8000-000000000001";
+  let saved = false;
+  const query = {
+    select: () => query,
+    order: () => query,
+    limit: async () => ({ error: { code: "42703" } }),
+  };
+  const actions = load("app/actions.ts", {
+    "@/types/domain": domain,
+    "@/lib/domain/logic": { validateQuantities },
+    "@/lib/supabase/server": {
+      createClient: async () => ({
+        auth: { getUser: async () => ({ data: { user: { id: uuid } } }) },
+        from: () => query,
+        rpc: async () => {
+          saved = true;
+          return { data: uuid };
+        },
+      }),
+    },
+    "next/cache": { revalidatePath: () => {} },
+  });
+  const result = await actions.saveDeck({
+    name: "Deck",
+    playstyle: "",
+    notes: "",
+    image_path: null,
+    variants: [],
+    cards: [
+      {
+        card_id: uuid,
+        quantity: 1,
+        printings: [{ quantity: 1, set_code: "TWM", collector_number: "025" }],
+      },
+    ],
+  });
+  assert.equal(result.success, false);
+  assert.match(result.error, /20261005_tcgdex_printings.sql/);
+  assert.equal(saved, false);
+});
+
 const { parseDeckList } = load("lib/domain/deck-import.ts");
 test("deck import parses accents, apostrophes, duplicate printings and Energy quantities", () => {
   const rows = parseDeckList(
@@ -206,6 +252,9 @@ test("deck import parses accents, apostrophes, duplicate printings and Energy qu
   );
   assert.equal(rows.length, 3);
   assert.equal(rows[0].quantity, 4);
+  assert.equal(rows[0].printings.length, 2);
+  assert.equal(rows[0].printings[0].set_code, "TWM");
+  assert.equal(rows[0].printings[1].collector_number, "99");
   assert.equal(rows[1].name, "Lillie's Determination");
   assert.equal(rows[2].category, "energy");
   assert.equal(rows[2].quantity, 13);

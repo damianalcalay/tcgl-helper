@@ -8,7 +8,10 @@ const config = [
   { ignores: [".next/**", "node_modules/**", "next-env.d.ts"] },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
-    files: ["components/decks/deck-image-viewer.tsx"],
+    files: [
+      "components/decks/deck-image-viewer.tsx",
+      "components/decks/printing-images.tsx",
+    ],
     rules: { "@next/next/no-img-element": "off" },
   },
   {

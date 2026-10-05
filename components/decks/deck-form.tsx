@@ -3,7 +3,12 @@ import { useState } from "react";
 import { Plus, Trash2, Upload, X, Loader2 } from "lucide-react";
 import { AppData, CARD_TYPES, Deck, DeckInput } from "@/types/domain";
 import { deckRoster, validateQuantities } from "@/lib/domain/logic";
-import { parseDeckList } from "@/lib/domain/deck-import";
+import {
+  parseDeckList,
+  resizePrintings,
+  ImportedCard,
+} from "@/lib/domain/deck-import";
+import { PrintingImages } from "@/components/decks/printing-images";
 import { saveDeck } from "@/app/actions";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -30,6 +35,7 @@ export function DeckForm({
       ? deckRoster(data, deck.id).map((c) => ({
           card_id: c.id,
           quantity: c.quantity,
+          printings: c.printings,
         }))
       : [],
   );
@@ -39,14 +45,27 @@ export function DeckForm({
       .map((v) => v.variant_id),
   );
   const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [draftCards, setDraftCards] = useState<
     { id: string; name: string; type: string }[]
   >([]);
   const library = [...data.cards, ...draftCards];
   const energyIds = library.filter((c) => c.type === "energy").map((c) => c.id);
-  function importList() {
+  async function importList() {
+    setImporting(true);
+    setImportWarnings([]);
     try {
-      const parsed = parseDeckList(importText);
+      parseDeckList(importText);
+      const response = await fetch("/api/deck-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: importText }),
+      });
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(result.error ?? "Unable to import deck.");
+      const parsed: ImportedCard[] = result.cards;
       const drafts: typeof draftCards = [];
       const next = parsed.map((entry) => {
         const existing = library.find(
@@ -57,18 +76,27 @@ export function DeckForm({
         const card = existing ?? {
           id: crypto.randomUUID(),
           name: entry.name,
-          type: entry.category === "energy" ? "energy" : "",
+          type:
+            entry.printings.find((p) => p.resolved_type)?.resolved_type ??
+            (entry.category === "energy" ? "energy" : ""),
         };
         if (!data.cards.some((c) => c.id === card.id)) drafts.push(card);
-        return { card_id: card.id, quantity: entry.quantity };
+        return {
+          card_id: card.id,
+          quantity: entry.quantity,
+          printings: entry.printings,
+        };
       });
       setDraftCards(drafts);
       setCards(next);
+      setImportWarnings(result.warnings);
       mutation.setError("");
     } catch (error) {
       mutation.setError(
         error instanceof Error ? error.message : "Unable to import deck list.",
       );
+    } finally {
+      setImporting(false);
     }
   }
   const [selected, setSelected] = useState("");
@@ -157,7 +185,10 @@ export function DeckForm({
           playstyle,
           notes,
           image_path: imagePath,
-          cards,
+          cards: cards.map((c) => ({
+            ...c,
+            printings: resizePrintings(c.printings, c.quantity),
+          })),
           variants,
           new_cards: usedDrafts.map((c) => ({
             ...c,
@@ -185,7 +216,7 @@ export function DeckForm({
       title={deck ? "Edit deck" : "Create a deck"}
       description="Build your reference list, add a playstyle, and keep your notes together."
       onClose={onClose}
-      busy={mutation.pending}
+      busy={mutation.pending || importing}
     >
       <form
         className="form-stack"
@@ -194,7 +225,10 @@ export function DeckForm({
           submit();
         }}
       >
-        <fieldset disabled={mutation.pending} className="form-stack">
+        <fieldset
+          disabled={mutation.pending || importing}
+          className="form-stack"
+        >
           <label className="field-label">
             Deck name
             <Input
@@ -227,13 +261,21 @@ export function DeckForm({
               />
             </label>
             <p className="text-sm text-muted-foreground">
-              Import replaces the current list. Existing cards are reused by
-              name; missing cards are created when you save. Choose their exact
+              Import replaces the current list and fetches English card images,
+              expansion names, collector numbers and regulation marks from
+              TCGdex. Existing library cards are reused by name. Review card
               types below.
             </p>
             <Button type="button" onClick={importList}>
-              Import deck list
+              {importing ? "Fetching card images…" : "Import deck list"}
             </Button>
+            {importWarnings.length > 0 && (
+              <div role="status" className="field-hint">
+                {importWarnings.map((warning, i) => (
+                  <p key={i}>{warning}</p>
+                ))}
+              </div>
+            )}
           </details>
           <div className="add-card-row">
             <RegexCombobox
@@ -287,86 +329,95 @@ export function DeckForm({
               cards.map((c) => {
                 const card = library.find((x) => x.id === c.card_id);
                 return (
-                  <div className="editor-card" key={c.card_id}>
-                    <span className="quantity-badge">x{c.quantity}</span>
-                    <span className="flex-1">{card?.name}</span>
-                    {draftCards.some((d) => d.id === c.card_id) && (
-                      <label className="field-label">
-                        New card type
-                        <select
-                          aria-label={"Type for " + card?.name}
-                          value={card?.type ?? ""}
-                          onChange={(e) =>
-                            setDraftCards((ds) =>
-                              ds.map((d) =>
-                                d.id === c.card_id
-                                  ? { ...d, type: e.target.value }
-                                  : d,
+                  <div key={c.card_id}>
+                    <PrintingImages
+                      printings={c.printings}
+                      name={card?.name ?? "Card"}
+                      compact
+                    />
+                    <div className="editor-card">
+                      <span className="quantity-badge">x{c.quantity}</span>
+                      <span className="flex-1">{card?.name}</span>
+                      {draftCards.some((d) => d.id === c.card_id) && (
+                        <label className="field-label">
+                          New card type
+                          <select
+                            aria-label={"Type for " + card?.name}
+                            value={card?.type ?? ""}
+                            onChange={(e) =>
+                              setDraftCards((ds) =>
+                                ds.map((d) =>
+                                  d.id === c.card_id
+                                    ? { ...d, type: e.target.value }
+                                    : d,
+                                ),
+                              )
+                            }
+                          >
+                            <option value="">Choose type</option>
+                            {Object.entries(CARD_TYPES).map(
+                              ([value, label]) => (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              ),
+                            )}
+                          </select>
+                        </label>
+                      )}
+                      <div className="quantity-controls">
+                        <button
+                          type="button"
+                          aria-label={`Remove one ${card?.name}`}
+                          onClick={() =>
+                            setCards((cs) =>
+                              c.quantity === 1
+                                ? cs.filter((x) => x.card_id !== c.card_id)
+                                : cs.map((x) =>
+                                    x.card_id === c.card_id
+                                      ? { ...x, quantity: x.quantity - 1 }
+                                      : x,
+                                  ),
+                            )
+                          }
+                        >
+                          −
+                        </button>
+                        <span>{c.quantity}</span>
+                        <button
+                          type="button"
+                          aria-label={`Add one ${card?.name}`}
+                          disabled={
+                            c.quantity >= (card?.type === "energy" ? 60 : 4) ||
+                            total >= 60
+                          }
+                          onClick={() =>
+                            setCards((cs) =>
+                              cs.map((x) =>
+                                x.card_id === c.card_id
+                                  ? { ...x, quantity: x.quantity + 1 }
+                                  : x,
                               ),
                             )
                           }
                         >
-                          <option value="">Choose type</option>
-                          {Object.entries(CARD_TYPES).map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                    <div className="quantity-controls">
-                      <button
+                          +
+                        </button>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
                         type="button"
-                        aria-label={`Remove one ${card?.name}`}
+                        aria-label={`Remove ${card?.name}`}
                         onClick={() =>
                           setCards((cs) =>
-                            c.quantity === 1
-                              ? cs.filter((x) => x.card_id !== c.card_id)
-                              : cs.map((x) =>
-                                  x.card_id === c.card_id
-                                    ? { ...x, quantity: x.quantity - 1 }
-                                    : x,
-                                ),
+                            cs.filter((x) => x.card_id !== c.card_id),
                           )
                         }
                       >
-                        −
-                      </button>
-                      <span>{c.quantity}</span>
-                      <button
-                        type="button"
-                        aria-label={`Add one ${card?.name}`}
-                        disabled={
-                          c.quantity >= (card?.type === "energy" ? 60 : 4) ||
-                          total >= 60
-                        }
-                        onClick={() =>
-                          setCards((cs) =>
-                            cs.map((x) =>
-                              x.card_id === c.card_id
-                                ? { ...x, quantity: x.quantity + 1 }
-                                : x,
-                            ),
-                          )
-                        }
-                      >
-                        +
-                      </button>
+                        <Trash2 size={14} />
+                      </Button>
                     </div>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      type="button"
-                      aria-label={`Remove ${card?.name}`}
-                      onClick={() =>
-                        setCards((cs) =>
-                          cs.filter((x) => x.card_id !== c.card_id),
-                        )
-                      }
-                    >
-                      <Trash2 size={14} />
-                    </Button>
                   </div>
                 );
               })

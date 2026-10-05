@@ -1,10 +1,64 @@
+import type { CardPrinting } from "@/types/domain";
 export interface ImportedCard {
   name: string;
   quantity: number;
   category: "pokemon" | "trainer" | "energy";
+  printings: CardPrinting[];
 }
 
-// Expansion and collector number identify a printing; the library tracks card names.
+export function resizePrintings(
+  printings: CardPrinting[] | undefined,
+  quantity: number,
+): CardPrinting[] {
+  if (!printings?.length) return [];
+  let remaining = quantity;
+  const resized = printings.flatMap((p) => {
+    const count = Math.min(p.quantity, remaining);
+    remaining -= count;
+    return count > 0 ? [{ ...p, quantity: count }] : [];
+  });
+  if (remaining && resized.length) resized[0].quantity += remaining;
+  return resized;
+}
+
+export function validPrintings(value: unknown, quantity: number): boolean {
+  if (value === undefined) return true;
+  if (!Array.isArray(value) || value.length > 60) return false;
+  if (!value.length) return true;
+  return (
+    value.every(
+      (p) =>
+        p &&
+        typeof p === "object" &&
+        Number.isInteger(p.quantity) &&
+        p.quantity > 0 &&
+        p.quantity <= 60 &&
+        typeof p.set_code === "string" &&
+        /^[A-Z0-9]{2,10}$/.test(p.set_code) &&
+        typeof p.collector_number === "string" &&
+        /^\d+[a-z]?$/i.test(p.collector_number) &&
+        [
+          "tcgdex_id",
+          "set_id",
+          "set_name",
+          "series_name",
+          "regulation_mark",
+          "resolved_type",
+        ].every(
+          (field) =>
+            p[field] === undefined ||
+            (typeof p[field] === "string" && p[field].length <= 150),
+        ) &&
+        (p.image_url === undefined ||
+          (typeof p.image_url === "string" &&
+            /^https:\/\/assets\.tcgdex\.net\/en\/[a-zA-Z0-9./_-]+\/high\.webp$/.test(
+              p.image_url,
+            ))),
+    ) && value.reduce((sum, p) => sum + p.quantity, 0) === quantity
+  );
+}
+
+// Keep library identities by name, while preserving each printing in the deck.
 export function parseDeckList(text: string): ImportedCard[] {
   if (text.length > 50000) throw new Error("Deck list is too long.");
   let category: ImportedCard["category"] | undefined;
@@ -49,6 +103,14 @@ export function parseDeckList(text: string): ImportedCard[] {
       name: existing?.name ?? name,
       quantity: quantity + (existing?.quantity ?? 0),
       category,
+      printings: [
+        ...(existing?.printings ?? []),
+        {
+          quantity,
+          set_code: match[3].toUpperCase(),
+          collector_number: match[4],
+        },
+      ],
     });
   }
   const result = [...cards.values()];

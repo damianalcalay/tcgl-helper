@@ -269,17 +269,11 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
     .getByRole("dialog")
     .getByRole("button", { name: "Delete", exact: true })
     .click();
-  await expect(page.locator('p[role="alert"]')).toContainText(
-    "used by a deck or match",
-  );
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Delete Deck Alpha", exact: true }),
+  ).toHaveCount(0);
   await page.getByRole("link", { name: "Stats", exact: true }).click();
-  await page.getByRole("button", { name: "Details", exact: true }).click();
-  await page.getByRole("button", { name: "Delete match", exact: true }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Delete", exact: true })
-    .click();
   await expect(
     page.getByRole("heading", { name: "Every game tells you something" }),
   ).toBeVisible();
@@ -402,6 +396,72 @@ test("histories expand independently and paginate the newest games; card edits a
 test("imports a deck, creates missing cards and saves thirteen Energy copies", async ({
   page,
 }) => {
+  await page.route("**/api/deck-import", async (route) => {
+    await route.fulfill({
+      json: {
+        cards: [
+          {
+            name: "Imported Ogerpon ex",
+            category: "pokemon",
+            quantity: 4,
+            printings: [
+              {
+                quantity: 2,
+                set_code: "TWM",
+                collector_number: "025",
+                set_id: "sv06",
+                tcgdex_id: "sv06-025",
+                set_name: "Twilight Masquerade",
+                regulation_mark: "H",
+                series_name: "Scarlet & Violet",
+                image_url: "https://assets.tcgdex.net/en/sv/sv06/025/high.webp",
+                resolved_type: "basic_ex",
+              },
+              {
+                quantity: 2,
+                set_code: "TWM",
+                collector_number: "211",
+                set_id: "sv06",
+                tcgdex_id: "sv06-211",
+                set_name: "Twilight Masquerade",
+                regulation_mark: "H",
+                image_url: "https://assets.tcgdex.net/en/sv/sv06/211/high.webp",
+                resolved_type: "basic_ex",
+              },
+            ],
+          },
+          {
+            name: "Imported Ultra Ball",
+            category: "trainer",
+            quantity: 4,
+            printings: [
+              { quantity: 4, set_code: "MEG", collector_number: "131" },
+            ],
+          },
+          {
+            name: "Imported Grass Energy",
+            category: "energy",
+            quantity: 13,
+            printings: [
+              {
+                quantity: 13,
+                set_code: "MEE",
+                collector_number: "9",
+                resolved_type: "energy",
+              },
+            ],
+          },
+        ],
+        warnings: ["Could not resolve Imported Ultra Ball; identifiers kept."],
+      },
+    });
+  });
+  await page.route("https://assets.tcgdex.net/**", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="245" height="337"><rect width="245" height="337" fill="#d9e8c7"/><text x="20" y="150">Test card image</text></svg>',
+    }),
+  );
   await page.goto("/auth/login");
   await page.getByLabel("Email", { exact: true }).fill("fixture@example.test");
   await page.getByLabel("Password", { exact: true }).fill("fixture-password");
@@ -446,6 +506,75 @@ test("imports a deck, creates missing cards and saves thirteen Energy copies", a
     page.getByRole("dialog").getByText("x13", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.goto("/notebook");
+  await choose(page, "Active deck", "Imported deck");
+  await expect(
+    page.getByText("Twilight Masquerade", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByText(/TWM · #025 · Regulation H/)).toBeVisible();
+  await page
+    .getByRole("button", { name: "Enlarge Imported Ogerpon ex TWM 025" })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page
+    .getByRole("button", { name: /Imported Ogerpon ex copy 1: Available/ })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: /Imported Ogerpon ex copy 1: Discard pile/,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: /Imported Ogerpon ex copy 1: Discard pile/ })
+    .click();
+  await expect(
+    page.getByRole("button", { name: /Imported Ogerpon ex copy 1: Prizes/ }),
+  ).toBeVisible();
+  const prizePanel = page.getByRole("region", { name: "Prize cards" });
+  const removePrize = prizePanel.getByRole("button", {
+    name: "Remove Imported Ogerpon ex copy 1 from Prizes",
+  });
+  await expect(removePrize.getByRole("img")).toBeVisible();
+  await expect(prizePanel.getByText("1 / 6 prizes")).toBeVisible();
+  await page
+    .getByRole("button", { name: /Imported Ogerpon ex copy 3: Available/ })
+    .click();
+  await page
+    .getByRole("button", { name: /Imported Ogerpon ex copy 3: Discard pile/ })
+    .click();
+  const removeOtherArt = prizePanel.getByRole("button", {
+    name: "Remove Imported Ogerpon ex copy 3 from Prizes",
+  });
+  await expect(removeOtherArt.getByRole("img")).toHaveAttribute(
+    "src",
+    /211\/low.webp/,
+  );
+  await expect(prizePanel.getByText("2 / 6 prizes")).toBeVisible();
+  await page
+    .getByRole("searchbox", { name: "Search card names" })
+    .fill("Ultra Ball");
+  await expect(page.locator(".tracker-list .tracker-row")).toHaveCount(1);
+  await expect(removePrize).toBeVisible();
+  await removePrize.click();
+  await expect(removeOtherArt).toBeVisible();
+  await expect(prizePanel.getByText("1 / 6 prizes")).toBeVisible();
+  await removeOtherArt.click();
+  await expect(
+    prizePanel.getByText("No copies marked as Prizes yet."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Clear card search" }).click();
+  await expect(
+    page.getByRole("button", { name: /Imported Ogerpon ex copy 1: Available/ }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "test-results/tcgdex-tracker.png",
+    fullPage: true,
+  });
+  await page.reload();
+  await choose(page, "Active deck", "Imported deck");
+  await expect(page.getByText(/TWM · #025 · Regulation H/)).toBeVisible();
+  await page.goto("/decks");
   await page
     .getByRole("button", { name: "Delete Imported deck", exact: true })
     .click();

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { CARD_TYPES, CardType, DeckInput, MatchInput } from "@/types/domain";
 import { validateQuantities } from "@/lib/domain/logic";
+import { validPrintings } from "@/lib/domain/deck-import";
 export type ActionResult =
   { success: true; id?: string } | { success: false; error: string };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -22,6 +23,12 @@ function text(value: unknown): value is string {
 function fail(error: unknown): ActionResult {
   console.error("TCGL Helper mutation failed", error);
   const e = error as { code?: string; message?: string };
+  if (e.code === "42703")
+    return {
+      success: false,
+      error:
+        "Install the 20261005_tcgdex_printings.sql migration in Supabase before saving imported images.",
+    };
   if (e.code === "23503" || e.code === "23001")
     return {
       success: false,
@@ -115,7 +122,9 @@ export async function saveDeck(input: DeckInput): Promise<ActionResult> {
             !name(c.name) ||
             !Object.hasOwn(CARD_TYPES, c.type),
         ))) ||
-    input.cards.some((c) => !c || !id(c.card_id)) ||
+    input.cards.some(
+      (c) => !c || !id(c.card_id) || !validPrintings(c.printings, c.quantity),
+    ) ||
     input.variants.some((v) => !id(v)) ||
     (input.image_path !== null && typeof input.image_path !== "string")
   )
@@ -136,6 +145,14 @@ export async function saveDeck(input: DeckInput): Promise<ActionResult> {
     };
   try {
     const client = await authenticated();
+    if (input.cards.some((c) => c.printings?.length)) {
+      const { error: schemaError } = await client
+        .from("deck_cards")
+        .select("printings")
+        .order("deck_id")
+        .limit(0);
+      if (schemaError) throw schemaError;
+    }
     const { data, error } = await client.rpc("save_deck", { payload: input });
     if (error) throw error;
     refresh();

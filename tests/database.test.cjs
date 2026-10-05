@@ -38,6 +38,25 @@ for (const migrated of [false, true])
           "utf8",
         ),
       );
+    if (migrated)
+      await db.exec(
+        fs.readFileSync(
+          "supabase/migrations/20261005_tcgdex_printings.sql",
+          "utf8",
+        ),
+      );
+    if (migrated) {
+      await db.exec(`alter table public.matches drop constraint matches_deck_id_user_id_fkey;
+        alter table public.matches add constraint matches_deck_id_user_id_fkey foreign key(deck_id,user_id) references public.decks(id,user_id) on delete restrict;
+        alter table public.matches drop constraint matches_opponent_deck_id_user_id_fkey;
+        alter table public.matches add constraint matches_opponent_deck_id_user_id_fkey foreign key(opponent_deck_id,user_id) references public.decks(id,user_id) on delete restrict;`);
+      await db.exec(
+        fs.readFileSync(
+          "supabase/migrations/20261005_deck_history_cascade.sql",
+          "utf8",
+        ),
+      );
+    }
     await db.query(`select set_config('request.jwt.claim.sub',$1,false)`, [
       USER,
     ]);
@@ -81,6 +100,56 @@ for (const migrated of [false, true])
     const opponent = await rpc(
       "save_deck",
       deckPayload("Opponent", [{ card_id: basic, quantity: 1 }]),
+    );
+    await t.test(
+      "printing identifiers and separate arts persist through deck edits",
+      async () => {
+        const printings = [
+          {
+            quantity: 1,
+            set_code: "TWM",
+            collector_number: "025",
+            tcgdex_id: "sv06-025",
+            set_name: "Twilight Masquerade",
+            regulation_mark: "H",
+            image_url: "https://assets.tcgdex.net/en/sv/sv06/025/high.webp",
+          },
+          {
+            quantity: 1,
+            set_code: "TWM",
+            collector_number: "211",
+            tcgdex_id: "sv06-211",
+          },
+        ];
+        const did = await rpc(
+          "save_deck",
+          deckPayload("Printing test", [
+            { card_id: basic, quantity: 2, printings },
+          ]),
+        );
+        const stored = await db.query(
+          "select printings from public.deck_cards where deck_id=$1",
+          [did],
+        );
+        assert.deepEqual(stored.rows[0].printings, printings);
+        await rpc(
+          "save_deck",
+          deckPayload(
+            "Printing test edited",
+            [{ card_id: basic, quantity: 2, printings }],
+            { id: did },
+          ),
+        );
+        assert.deepEqual(
+          (
+            await db.query(
+              "select printings from public.deck_cards where deck_id=$1",
+              [did],
+            )
+          ).rows[0].printings,
+          printings,
+        );
+      },
     );
     await t.test("deck limits and failed transaction rollback", async () => {
       await rpc("save_deck", deckPayload("Full", many));
@@ -323,10 +392,6 @@ for (const migrated of [false, true])
         assert.equal(snapshot.card_type, "basic");
         assert.equal(snapshot.quantity, 2);
         await assert.rejects(
-          db.query("select public.delete_entity('deck',$1)", [mine]),
-          /foreign key/,
-        );
-        await assert.rejects(
           db.query("select public.delete_entity('card',$1)", [basic]),
           /foreign key/,
         );
@@ -394,4 +459,89 @@ for (const migrated of [false, true])
       );
       await db.query("select public.delete_entity('deck',$1)", [mine]);
     });
+    await t.test(
+      "deck deletion cascades all history on either side and preserves unrelated matches and cards",
+      async () => {
+        const starter = await card("Cascade starter");
+        const makeDeck = (name) =>
+          rpc(
+            "save_deck",
+            deckPayload(name, [{ card_id: starter, quantity: 2 }]),
+          );
+        const target = await makeDeck("Delete with history");
+        const survivor = await makeDeck("Keep opponent");
+        const unrelated = await makeDeck("Unrelated");
+        const match = (deck_id, opponent_deck_id) =>
+          rpc("save_match", {
+            ...input,
+            deck_id,
+            opponent_deck_id,
+            starter_id: starter,
+            opponent_starter_id: starter,
+            prizes: [starter, starter],
+          });
+        const ownMatch = await match(target, survivor);
+        const opponentMatch = await match(survivor, target);
+        const selfMatch = await match(target, target);
+        const keptMatch = await match(survivor, unrelated);
+        await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
+          OTHER,
+        ]);
+        await assert.rejects(
+          db.query("select public.delete_entity('deck',$1)", [target]),
+          /not found/,
+        );
+        await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
+          USER,
+        ]);
+        assert.equal(
+          (
+            await db.query(
+              "select count(*)::int n from public.matches where id=any($1::uuid[])",
+              [[ownMatch, opponentMatch, selfMatch]],
+            )
+          ).rows[0].n,
+          3,
+        );
+        await db.query("select public.delete_entity('deck',$1)", [target]);
+        for (const table of ["matches", "match_rosters", "match_prizes"]) {
+          const column = table === "matches" ? "id" : "match_id";
+          assert.equal(
+            (
+              await db.query(
+                `select count(*)::int n from public.${table} where ${column}=any($1::uuid[])`,
+                [[ownMatch, opponentMatch, selfMatch]],
+              )
+            ).rows[0].n,
+            0,
+          );
+          assert.ok(
+            (
+              await db.query(
+                `select count(*)::int n from public.${table} where ${column}=$1`,
+                [keptMatch],
+              )
+            ).rows[0].n > 0,
+          );
+        }
+        assert.equal(
+          (
+            await db.query(
+              "select count(*)::int n from public.cards where id=$1",
+              [starter],
+            )
+          ).rows[0].n,
+          1,
+        );
+        assert.equal(
+          (
+            await db.query(
+              "select count(*)::int n from public.decks where id=$1",
+              [survivor],
+            )
+          ).rows[0].n,
+          1,
+        );
+      },
+    );
   });

@@ -28,6 +28,19 @@ export interface DeckCard {
   deck_id: string;
   card_id: string;
   quantity: number;
+  printings?: CardPrinting[];
+}
+export interface CardPrinting {
+  quantity: number;
+  set_code: string;
+  collector_number: string;
+  tcgdex_id?: string;
+  set_id?: string;
+  set_name?: string;
+  series_name?: string;
+  regulation_mark?: string;
+  image_url?: string;
+  resolved_type?: CardType;
 }
 export interface Deck {
   id: string;
@@ -88,7 +101,7 @@ export interface DeckInput {
   playstyle: string;
   notes: string;
   image_path: string | null;
-  cards: { card_id: string; quantity: number }[];
+  cards: { card_id: string; quantity: number; printings?: CardPrinting[] }[];
   variants: string[];
   new_cards?: { id: string; name: string; type: CardType }[];
 }
@@ -110,4 +123,5 @@ export interface CardOption {
   name: string;
   type: CardType;
   quantity: number;
+  printings?: CardPrinting[];
 }

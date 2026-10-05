@@ -13,6 +13,7 @@ create table public.decks (
  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), unique(id,user_id)
 );
 create table public.deck_cards (
+ printings jsonb not null default '[]'::jsonb check(jsonb_typeof(printings)='array' and jsonb_array_length(printings)<=60),
  deck_id uuid not null, card_id uuid not null, user_id uuid not null default auth.uid(), quantity smallint not null check(quantity between 1 and 60),
  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), primary key(deck_id,card_id),
  foreign key(deck_id,user_id) references public.decks(id,user_id) on delete cascade,
@@ -31,8 +32,8 @@ create table public.matches (
  result public.match_result not null, my_prizes smallint not null check(my_prizes between 0 and 6), opponent_prizes smallint not null check(opponent_prizes between 0 and 6),
  starter_id uuid not null references public.cards(id) on delete restrict, opponent_starter_id uuid not null references public.cards(id) on delete restrict,
  played_at timestamptz not null default now(), notes text not null default '', created_at timestamptz not null default now(), updated_at timestamptz not null default now(), unique(id,user_id),
- foreign key(deck_id,user_id) references public.decks(id,user_id) on delete restrict,
- foreign key(opponent_deck_id,user_id) references public.decks(id,user_id) on delete restrict
+ foreign key(deck_id,user_id) references public.decks(id,user_id) on delete cascade,
+ foreign key(opponent_deck_id,user_id) references public.decks(id,user_id) on delete cascade
 );
 create table public.match_rosters (
  match_id uuid not null, user_id uuid not null, side text not null check(side in ('mine','opponent')), card_id uuid not null,
@@ -125,7 +126,7 @@ begin
  cid:=coalesce(card_map->>(entry->>'card_id'),entry->>'card_id')::uuid;
  if not exists(select 1 from public.cards where id=cid and user_id=uid) then raise exception 'Card not found.'; end if;
  total:=total+(entry->>'quantity')::integer;
- insert into public.deck_cards(deck_id,card_id,user_id,quantity) values(did,cid,uid,(entry->>'quantity')::smallint);
+ insert into public.deck_cards(deck_id,card_id,user_id,quantity,printings) values(did,cid,uid,(entry->>'quantity')::smallint,coalesce(entry->'printings','[]'::jsonb));
  end loop;
  if total>60 then raise exception 'A deck cannot contain more than 60 cards.'; end if;
  delete from public.deck_variants where deck_id=did;

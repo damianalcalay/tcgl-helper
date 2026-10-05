@@ -4,7 +4,9 @@ export function deckRoster(data: AppData, id: string): CardOption[] {
     .filter((x) => x.deck_id === id)
     .flatMap((x) => {
       const card = data.cards.find((c) => c.id === x.card_id);
-      return card ? [{ ...card, quantity: x.quantity }] : [];
+      return card
+        ? [{ ...card, quantity: x.quantity, printings: x.printings }]
+        : [];
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
