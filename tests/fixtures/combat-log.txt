@@ -1,0 +1,124 @@
+Setup
+Ciberbrian chose tails for the opening coin flip.
+bastorz won the coin toss.
+bastorz decided to go first.
+Ciberbrian drew 7 cards for the opening hand.
+- 7 drawn cards.
+   • Lillie's Determination, Basic Grass Energy, Applin, Bayleef, Lillie's Determination, Lillie's Determination, Forest of Vitality
+bastorz drew 7 cards for the opening hand.
+- 7 drawn cards.
+Ciberbrian played Applin to the Active Spot.
+bastorz played Fezandipiti ex to the Active Spot.
+
+bastorz's Turn
+bastorz drew a card.
+bastorz played Celebi to the Bench.
+bastorz played Poké Pad.
+- bastorz drew Chikorita.
+- bastorz shuffled their deck.
+bastorz played Chikorita to the Bench.
+bastorz attached Basic Grass Energy to Fezandipiti ex in the Active Spot.
+bastorz retreated Fezandipiti ex to the Bench.
+- Basic Grass Energy was discarded from bastorz's Fezandipiti ex.
+bastorz's Celebi is now in the Active Spot.
+bastorz played Night Stretcher.
+- bastorz moved bastorz's Basic Grass Energy to their hand.
+bastorz ended their turn.
+
+Ciberbrian's Turn
+Ciberbrian drew Basic Grass Energy.
+Ciberbrian attached Basic Grass Energy to Applin in the Active Spot.
+Ciberbrian played Forest of Vitality to the Stadium spot.
+Ciberbrian played Lillie's Determination.
+- Ciberbrian shuffled 4 cards into their deck.
+   • Lillie's Determination, Basic Grass Energy, Bayleef, Lillie's Determination
+- Ciberbrian drew 8 cards.
+   • Unfair Stamp, Chikorita, Ciphermaniac's Codebreaking, Briar, Special Red Card, Basic Grass Energy, Meganium, Ultra Ball
+Ciberbrian played Ultra Ball.
+- Ciberbrian discarded 2 cards.
+   • Unfair Stamp, Meganium
+- Ciberbrian drew Tapu Bulu.
+- Ciberbrian shuffled their deck.
+Ciberbrian played Tapu Bulu to the Bench.
+Ciberbrian played Chikorita to the Bench.
+Ciberbrian retreated Applin to the Bench.
+- Basic Grass Energy was discarded from Ciberbrian's Applin.
+Ciberbrian's Tapu Bulu is now in the Active Spot.
+Ciberbrian ended their turn.
+
+bastorz's Turn
+bastorz drew a card.
+bastorz played Boss's Orders.
+- Ciberbrian's Chikorita was switched with Ciberbrian's Tapu Bulu to become the Active Pokémon.
+Ciberbrian's Chikorita is now in the Active Spot.
+bastorz attached Basic Grass Energy to Celebi in the Active Spot.
+bastorz retreated Celebi to the Bench.
+- Basic Grass Energy was discarded from bastorz's Celebi.
+bastorz's Chikorita is now in the Active Spot.
+bastorz ended their turn.
+
+Ciberbrian's Turn
+Ciberbrian drew Teal Mask Ogerpon ex.
+Ciberbrian attached Basic Grass Energy to Chikorita in the Active Spot.
+Ciberbrian played Teal Mask Ogerpon ex to the Bench.
+Ciberbrian's Chikorita used Growl.
+
+bastorz's Turn
+bastorz drew a card.
+bastorz evolved Chikorita to Bayleef in the Active Spot.
+bastorz evolved Bayleef to Meganium in the Active Spot.
+bastorz played Teal Mask Ogerpon ex to the Bench.
+bastorz's Teal Mask Ogerpon ex used Teal Dance.
+- bastorz attached Basic Grass Energy to Teal Mask Ogerpon ex on the Bench.
+- bastorz drew a card.
+bastorz retreated Meganium to the Bench.
+bastorz's Celebi is now in the Active Spot.
+
+Ciberbrian's Turn
+Ciberbrian retreated Chikorita to the Bench.
+Ciberbrian's Teal Mask Ogerpon ex is now in the Active Spot.
+Ciberbrian's Teal Mask Ogerpon ex used Myriad Leaf Shower on bastorz’s Celebi for 120 damage.
+- Damage breakdown:
+   • Base damage: 30 damage
+   • 3 attached Energy: 90 damage
+   • Total damage: 120 damage
+bastorz's Celebi was Knocked Out!
+Ciberbrian took a Prize card.
+Poké Pad was added to Ciberbrian's hand.
+bastorz's Teal Mask Ogerpon ex is now in the Active Spot.
+
+bastorz's Turn
+bastorz's Teal Mask Ogerpon ex used Myriad Leaf Shower on Ciberbrian’s Teal Mask Ogerpon ex for 300 damage.
+Ciberbrian's Teal Mask Ogerpon ex was Knocked Out!
+- 3 cards were discarded from Ciberbrian's Teal Mask Ogerpon ex.
+   • Basic Grass Energy, Basic Grass Energy, Basic Grass Energy
+bastorz took 2 Prize cards.
+A card was added to bastorz's hand.
+A card was added to bastorz's hand.
+Ciberbrian's Chikorita is now in the Active Spot.
+
+Ciberbrian's Turn
+Ciberbrian played Teal Mask Ogerpon ex to the Bench.
+Ciberbrian retreated Chikorita to the Bench.
+Ciberbrian's Teal Mask Ogerpon ex is now in the Active Spot.
+Ciberbrian's Teal Mask Ogerpon ex used Myriad Leaf Shower on bastorz’s Teal Mask Ogerpon ex for 300 damage.
+bastorz's Teal Mask Ogerpon ex was Knocked Out!
+Ciberbrian took 2 Prize cards.
+Hydrapple ex was added to Ciberbrian's hand.
+Bug Catching Set was added to Ciberbrian's hand.
+bastorz's Fezandipiti ex is now in the Active Spot.
+
+Ciberbrian's Turn
+Ciberbrian's Teal Mask Ogerpon ex used Myriad Leaf Shower on bastorz’s Fezandipiti ex for 180 damage.
+bastorz's Fezandipiti ex was Knocked Out!
+Ciberbrian took 2 Prize cards.
+Forest of Vitality was added to Ciberbrian's hand.
+Bug Catching Set was added to Ciberbrian's hand.
+bastorz played Teal Mask Ogerpon ex to the Active Spot.
+
+Ciberbrian's Turn
+Ciberbrian's Teal Mask Ogerpon ex used Myriad Leaf Shower on bastorz’s Teal Mask Ogerpon ex for 270 damage.
+bastorz's Teal Mask Ogerpon ex was Knocked Out!
+Ciberbrian took a Prize card.
+Meganium was added to Ciberbrian's hand.
+All Prize cards taken. Ciberbrian wins.

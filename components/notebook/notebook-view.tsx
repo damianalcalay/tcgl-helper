@@ -50,7 +50,7 @@ export function NotebookView({ data }: { data: AppData }) {
   const [result, setResult] = useState<Result | "">("");
   const [matchForm, setMatchForm] = useState<{
     deck_id: string;
-    result: Result;
+    result: Result | "";
     prizes: string[];
   } | null>(null);
   const [matchMessage, setMatchMessage] = useState("");
@@ -95,7 +95,7 @@ export function NotebookView({ data }: { data: AppData }) {
     setVisibleIds(null);
   }
   function addMatch() {
-    if (!deck || !result) return;
+    if (!deck) return;
     const prizes = roster.flatMap((c) =>
       Array.from({ length: c.quantity }, (_, i) =>
         copies[`${deckId}:${c.id}:${i}`] === 2 ? c.id : "",
@@ -213,7 +213,7 @@ export function NotebookView({ data }: { data: AppData }) {
                 setMatchMessage("");
               }}
             />
-            <Button disabled={!result} onClick={addMatch}>
+            <Button onClick={addMatch}>
               <Plus />
               Add Match
             </Button>
@@ -266,6 +266,26 @@ export function NotebookView({ data }: { data: AppData }) {
               ) : (
                 <p className="inline-empty">No copies marked as Prizes yet.</p>
               )}
+              <div className="notebook-prize-actions">
+                <Button size="sm" onClick={addMatch}>
+                  <Plus />
+                  Add Match
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setReset(true)}
+                >
+                  <RotateCcw />
+                  Play again
+                </Button>
+                {matchError && (
+                  <p role="alert" className="error-message">
+                    {matchError}
+                  </p>
+                )}
+                {matchMessage && <p role="status">{matchMessage}</p>}
+              </div>
             </section>
 
             <section className="panel tracker-panel">

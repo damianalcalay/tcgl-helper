@@ -56,7 +56,7 @@ export async function loadAppData(): Promise<{
         allRows<Prize>(client, "match_prizes"),
       ]);
     await Promise.all(
-      deckCards.flatMap((row) =>
+      [...deckCards, ...rosters].flatMap((row) =>
         (row.printings ?? []).map(async (printing) => {
           if (!printing.manual_image_path) return;
           const { data } = await client.storage

@@ -64,6 +64,10 @@ for (const migrated of [false, true])
           "utf8",
         ),
       );
+    if (migrated)
+      await db.exec(
+        fs.readFileSync("supabase/migrations/20261005_combat_logs.sql", "utf8"),
+      );
     await db.query(`select set_config('request.jwt.claim.sub',$1,false)`, [
       USER,
     ]);
@@ -375,6 +379,88 @@ for (const migrated of [false, true])
         6,
       );
     });
+    await t.test(
+      "combat log persistence, note limits and printing history survive match edits",
+      async () => {
+        const combat = fs.readFileSync("tests/fixtures/combat-log.txt", "utf8");
+        const match = await rpc("save_match", {
+          ...input,
+          combat_log: combat,
+          log_player: "bastorz",
+          coin_won: true,
+          notes: "x".repeat(200),
+          prizes: [],
+        });
+        const saved = (
+          await db.query(
+            "select combat_log, log_player, coin_won, notes from public.matches where id=$1",
+            [match],
+          )
+        ).rows[0];
+        assert.equal(saved.combat_log, combat);
+        assert.equal(saved.log_player, "bastorz");
+        assert.equal(saved.coin_won, true);
+        assert.equal(saved.notes.length, 200);
+        await assert.rejects(
+          rpc("save_match", { ...input, notes: "x".repeat(201) }),
+          /200 characters/,
+        );
+        await assert.rejects(
+          rpc("save_match", { ...input, combat_log: "x".repeat(200001) }),
+          /too long/,
+        );
+        const printedDeck = await rpc(
+          "save_deck",
+          deckPayload("Log printing snapshot", [
+            {
+              card_id: basic,
+              quantity: 1,
+              printings: [
+                {
+                  quantity: 1,
+                  set_code: "TWM",
+                  collector_number: "17",
+                  image_url:
+                    "https://assets.tcgdex.net/en/sv/sv06/017/high.webp",
+                },
+              ],
+            },
+          ]),
+        );
+        const printedMatch = await rpc("save_match", {
+          ...input,
+          deck_id: printedDeck,
+          prizes: [basic],
+        });
+        await rpc(
+          "save_deck",
+          deckPayload(
+            "Log printing snapshot edited",
+            [{ card_id: basic, quantity: 1 }],
+            { id: printedDeck },
+          ),
+        );
+        await rpc("save_match", {
+          ...input,
+          id: printedMatch,
+          deck_id: printedDeck,
+          prizes: [basic],
+        });
+        const snapshot = (
+          await db.query(
+            "select printings from public.match_rosters where match_id=$1 and side='mine'",
+            [printedMatch],
+          )
+        ).rows[0];
+        assert.equal(snapshot.printings[0].set_code, "TWM");
+        assert.equal(snapshot.printings[0].collector_number, "17");
+        await db.query("select public.delete_entity($1,$2)", [
+          "deck",
+          printedDeck,
+        ]);
+        await db.query("select public.delete_entity($1,$2)", ["match", match]);
+      },
+    );
     await t.test(
       "history survives editing deck/card; deletions respect relationships",
       async () => {

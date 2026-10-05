@@ -27,6 +27,7 @@ create table public.deck_variants (
 );
 -- Historical roster snapshots keep old matches accurate after deck/card edits.
 create table public.matches (
+ combat_log text not null default '' check(length(combat_log)<=200000), log_player text not null default '', coin_won boolean, card_back text not null default 'classic', opponent_card_back text not null default 'classic',
  id uuid primary key default gen_random_uuid(), user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
  deck_id uuid not null, opponent_deck_id uuid not null, deck_name text not null, opponent_deck_name text not null,
  result public.match_result not null, my_prizes smallint not null check(my_prizes between 0 and 6), opponent_prizes smallint not null check(opponent_prizes between 0 and 6),
@@ -36,6 +37,7 @@ create table public.matches (
  foreign key(opponent_deck_id,user_id) references public.decks(id,user_id) on delete cascade
 );
 create table public.match_rosters (
+ printings jsonb not null default '[]'::jsonb,
  match_id uuid not null, user_id uuid not null, side text not null check(side in ('mine','opponent')), card_id uuid not null,
  card_name text not null, card_type public.card_type not null, quantity smallint not null check(quantity between 1 and 60),
  created_at timestamptz not null default now(), primary key(match_id,side,card_id),
@@ -139,6 +141,8 @@ create function public.save_match(payload jsonb) returns uuid language plpgsql s
 declare uid uuid:=auth.uid(); mid uuid; did uuid; oid uuid; old_match public.matches; my_roster jsonb; their_roster jsonb; sid uuid; osid uuid; item jsonb; pid text; slot_no integer:=0; needed integer;
 begin
  if uid is null then raise exception 'Sign in to continue.'; end if;
+ if length(coalesce(payload->>'notes',''))>200 then raise exception 'Match notes must be at most 200 characters.'; end if;
+ if length(coalesce(payload->>'combat_log',''))>200000 then raise exception 'Combat log is too long.'; end if;
  perform pg_advisory_xact_lock(hashtextextended(uid::text,0));
  mid:=coalesce(nullif(payload->>'id','')::uuid,gen_random_uuid()); did:=(payload->>'deck_id')::uuid; oid:=(payload->>'opponent_deck_id')::uuid;
  if nullif(payload->>'id','') is not null then
@@ -148,14 +152,14 @@ begin
  if not exists(select 1 from public.decks where id=did and user_id=uid) or not exists(select 1 from public.decks where id=oid and user_id=uid) then raise exception 'Select valid decks.'; end if;
  -- Reuse the original roster when editing a match with the same deck.
  if old_match.deck_id=did then
- select jsonb_agg(jsonb_build_object('card_id',card_id,'name',card_name,'type',card_type,'quantity',quantity)) into my_roster from public.match_rosters where match_id=mid and side='mine';
+ select jsonb_agg(jsonb_build_object('card_id',card_id,'name',card_name,'type',card_type,'quantity',quantity,'printings',printings)) into my_roster from public.match_rosters where match_id=mid and side='mine';
  else
- select jsonb_agg(jsonb_build_object('card_id',c.id,'name',c.name,'type',c.type,'quantity',dc.quantity)) into my_roster from public.deck_cards dc join public.cards c on c.id=dc.card_id where dc.deck_id=did;
+ select jsonb_agg(jsonb_build_object('card_id',c.id,'name',c.name,'type',c.type,'quantity',dc.quantity,'printings',dc.printings)) into my_roster from public.deck_cards dc join public.cards c on c.id=dc.card_id where dc.deck_id=did;
  end if;
  if old_match.opponent_deck_id=oid then
- select jsonb_agg(jsonb_build_object('card_id',card_id,'name',card_name,'type',card_type,'quantity',quantity)) into their_roster from public.match_rosters where match_id=mid and side='opponent';
+ select jsonb_agg(jsonb_build_object('card_id',card_id,'name',card_name,'type',card_type,'quantity',quantity,'printings',printings)) into their_roster from public.match_rosters where match_id=mid and side='opponent';
  else
- select jsonb_agg(jsonb_build_object('card_id',c.id,'name',c.name,'type',c.type,'quantity',dc.quantity)) into their_roster from public.deck_cards dc join public.cards c on c.id=dc.card_id where dc.deck_id=oid;
+ select jsonb_agg(jsonb_build_object('card_id',c.id,'name',c.name,'type',c.type,'quantity',dc.quantity,'printings',dc.printings)) into their_roster from public.deck_cards dc join public.cards c on c.id=dc.card_id where dc.deck_id=oid;
  end if;
  sid:=(payload->>'starter_id')::uuid; osid:=(payload->>'opponent_starter_id')::uuid;
  if not exists(select 1 from jsonb_array_elements(my_roster) x where x->>'card_id'=sid::text and x->>'type' in ('basic','basic_ex','basic_upper_ex','basic_gx','basic_legend','basic_prime','basic_sp','basic_tag_team_gx','basic_v','mega_basic_ex')) then raise exception 'Choose a Basic starter from your deck.'; end if;
@@ -178,6 +182,13 @@ begin
  for pid in select jsonb_array_elements_text(coalesce(payload->'prizes','[]')) loop
  slot_no:=slot_no+1;
  insert into public.match_prizes(match_id,user_id,slot,card_id) values(mid,uid,slot_no,pid::uuid);
+ end loop;
+ update public.matches set combat_log=coalesce(payload->>'combat_log',''), log_player=coalesce(payload->>'log_player',''), coin_won=case when coalesce(payload->>'combat_log','')='' then null else (payload->>'coin_won')::boolean end, card_back=coalesce(payload->>'card_back','classic'), opponent_card_back=coalesce(payload->>'opponent_card_back','classic') where id=mid and user_id=uid;
+ for item in select value from jsonb_array_elements(coalesce(my_roster,'[]')) loop
+ update public.match_rosters set printings=coalesce(item->'printings','[]') where match_id=mid and side='mine' and card_id=(item->>'card_id')::uuid;
+ end loop;
+ for item in select value from jsonb_array_elements(coalesce(their_roster,'[]')) loop
+ update public.match_rosters set printings=coalesce(item->'printings','[]') where match_id=mid and side='opponent' and card_id=(item->>'card_id')::uuid;
  end loop;
  return mid;
 end $$;

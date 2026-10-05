@@ -1,7 +1,7 @@
 "use client";
 import { Fragment, useState } from "react";
 import { AppData, Match } from "@/types/domain";
-import { summarize, winRate } from "@/lib/domain/logic";
+import { overallStats, summarize, winRate } from "@/lib/domain/logic";
 import { deleteEntity } from "@/app/actions";
 import {
   Trophy,
@@ -24,6 +24,9 @@ export function StatsView({ data }: { data: AppData }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<Match | null | undefined>();
   const [deleting, setDeleting] = useState<Match | null>(null);
+  const overall = overallStats(data.matches);
+  const coinGames = data.matches.filter((m) => typeof m.coin_won === "boolean");
+  const coinWins = coinGames.filter((m) => m.coin_won).length;
   const mutation = useMutation();
   const decks = data.decks.filter((d) =>
     data.matches.some((m) => m.deck_id === d.id),
@@ -83,6 +86,28 @@ export function StatsView({ data }: { data: AppData }) {
               value={decks.length}
               detail="Every deck with recorded games"
               icon={Layers3}
+            />
+            <Metric
+              label="Longest win streak"
+              value={overall.bestStreak}
+              detail="Consecutive wins across all decks"
+              icon={Trophy}
+            />
+            <Metric
+              label="Most played deck"
+              value={overall.mostPlayed?.name ?? "None"}
+              detail={`${overall.mostPlayed?.count ?? 0} matches played`}
+              icon={Layers3}
+            />
+            <Metric
+              label="Opening coin win rate"
+              value={
+                coinGames.length
+                  ? `${((coinWins / coinGames.length) * 100).toFixed(1)}%`
+                  : "N/A"
+              }
+              detail={`${coinWins} wins from ${coinGames.length} recorded opening flips`}
+              icon={Target}
             />
           </div>
           <div className="section-toolbar">

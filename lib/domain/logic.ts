@@ -27,6 +27,7 @@ export function matchRoster(
         name: r.card_name,
         type: r.card_type,
         quantity: r.quantity,
+        printings: r.printings,
       }));
   }
   return deckRoster(data, deckId);
@@ -35,6 +36,32 @@ export function winRate(matches: Match[]): number {
   return matches.length
     ? (matches.filter((m) => m.result === "win").length / matches.length) * 100
     : 0;
+}
+export function overallStats(matches: Match[]) {
+  let streak = 0,
+    bestStreak = 0;
+  const counts = new Map<string, { name: string; count: number }>();
+  for (const match of [...matches].sort(
+    (a, b) =>
+      Date.parse(a.played_at) - Date.parse(b.played_at) ||
+      Date.parse(a.created_at) - Date.parse(b.created_at) ||
+      a.id.localeCompare(b.id),
+  )) {
+    streak = match.result === "win" ? streak + 1 : 0;
+    bestStreak = Math.max(bestStreak, streak);
+    const deck = counts.get(match.deck_id) ?? {
+      name: match.deck_name,
+      count: 0,
+    };
+    deck.count++;
+    counts.set(match.deck_id, deck);
+  }
+  return {
+    bestStreak,
+    mostPlayed: [...counts.values()].sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name),
+    )[0],
+  };
 }
 export function summarize(matches: Match[]) {
   const sorted = [...matches].sort(

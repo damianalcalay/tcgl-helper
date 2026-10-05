@@ -15,12 +15,14 @@ function load(file, dependencies = {}) {
     module: testModule,
     exports: testModule.exports,
     require: (name) =>
-      name === "@/types/domain"
-        ? load("types/domain.ts")
-        : (dependencies[name] ??
-          (name === "@/lib/domain/deck-import"
-            ? load("lib/domain/deck-import.ts")
-            : require(name))),
+      name === "@/lib/domain/combat-log"
+        ? load("lib/domain/combat-log.ts")
+        : name === "@/types/domain"
+          ? load("types/domain.ts")
+          : (dependencies[name] ??
+            (name === "@/lib/domain/deck-import"
+              ? load("lib/domain/deck-import.ts")
+              : require(name))),
     Map,
     Set,
     Date,

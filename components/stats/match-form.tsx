@@ -7,12 +7,18 @@ import {
   Match,
   Result,
 } from "@/types/domain";
+import {
+  cardNameKey,
+  parseCombatLog,
+  ParsedCombatLog,
+} from "@/lib/domain/combat-log";
 import { matchRoster } from "@/lib/domain/logic";
 import { saveMatch } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Modal, ErrorMessage } from "@/components/shared/modal";
 import { RegexCombobox } from "@/components/shared/regex-combobox";
 import { useMutation } from "@/components/shared/use-mutation";
+import { CARD_BACKS } from "./combat-log-view";
 import { X, Loader2 } from "lucide-react";
 export function MatchForm({
   data,
@@ -24,9 +30,26 @@ export function MatchForm({
   data: AppData;
   match?: Match;
   onClose: () => void;
-  initialValues?: { deck_id: string; result: Result; prizes: string[] };
+  initialValues?: { deck_id: string; result: Result | ""; prizes: string[] };
   onSaved?: () => void;
 }) {
+  const [mode, setMode] = useState<"log" | "manual">(
+    match && !match.combat_log ? "manual" : "log",
+  );
+  const [combatLog, setCombatLog] = useState(match?.combat_log ?? "");
+  const [logPlayer, setLogPlayer] = useState(match?.log_player ?? "");
+  const [parsed, setParsed] = useState<ParsedCombatLog | null>(() => {
+    try {
+      return match?.combat_log ? parseCombatLog(match.combat_log) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [cardBack, setCardBack] = useState(match?.card_back ?? "classic");
+  const [opponentBack, setOpponentBack] = useState(
+    match?.opponent_card_back ?? "classic",
+  );
+  const [logError, setLogError] = useState("");
   const [deckId, setDeckId] = useState(
     match?.deck_id ?? initialValues?.deck_id ?? "",
   );
@@ -56,7 +79,76 @@ export function MatchForm({
   const basics = mine.filter((c) => BASIC_TYPES.includes(c.type));
   const theirBasics = theirs.filter((c) => BASIC_TYPES.includes(c.type));
   const selectedCount = prizes.filter(Boolean).length;
+  function applyLog(
+    log: ParsedCombatLog,
+    player: string,
+    ownDeck = deckId,
+    otherDeck = opponentId,
+  ) {
+    setLogPlayer(player);
+    const opponent = log.players.find((p) => p !== player)!;
+    if (!otherDeck) {
+      const candidates = data.decks.filter((d) =>
+        matchRoster(data, undefined, d.id, "opponent").some(
+          (c) =>
+            cardNameKey(c.name) === cardNameKey(log.starters[opponent] ?? ""),
+        ),
+      );
+      if (candidates.length === 1) {
+        otherDeck = candidates[0].id;
+        setOpponentId(otherDeck);
+      }
+    }
+    const own = matchRoster(data, match, ownDeck, "mine");
+    const other = matchRoster(data, match, otherDeck, "opponent");
+    setStarter(
+      own.find(
+        (c) => cardNameKey(c.name) === cardNameKey(log.starters[player] ?? ""),
+      )?.id ?? "",
+    );
+    setTheirStarter(
+      other.find(
+        (c) =>
+          cardNameKey(c.name) === cardNameKey(log.starters[opponent] ?? ""),
+      )?.id ?? "",
+    );
+    setMyPrizes(Math.min(6, log.prizesTaken[player]));
+    setTheirPrizes(Math.min(6, log.prizesTaken[opponent]));
+    setResult(log.winner ? (log.winner === player ? "win" : "loss") : "");
+    const used: Record<string, number> = {};
+    const inferred = (log.prizeCards[player] ?? []).slice(0, 6).map((name) => {
+      const card = own.find(
+        (c) => name && cardNameKey(c.name) === cardNameKey(name),
+      );
+      if (!card || (used[card.id] ?? 0) >= card.quantity) return "";
+      used[card.id] = (used[card.id] ?? 0) + 1;
+      return card.id;
+    });
+    setPrizes([...inferred, ...Array(6 - inferred.length).fill("")]);
+  }
+  function importLog(raw: string) {
+    setCombatLog(raw);
+    setLogError("");
+    if (!raw.trim()) {
+      setParsed(null);
+      return;
+    }
+    try {
+      const log = parseCombatLog(raw);
+      setParsed(log);
+      const player = log.perspective;
+      if (player) applyLog(log, player);
+      else setLogPlayer("");
+    } catch (error) {
+      setParsed(null);
+      setLogError(error instanceof Error ? error.message : "Invalid log.");
+    }
+  }
   function submit() {
+    if (mode === "log" && (!parsed || !logPlayer))
+      return mutation.setError(
+        "Paste a complete combat log and confirm Your player.",
+      );
     if (!deckId || !opponentId || !result || !starter || !theirStarter)
       return mutation.setError(
         "Select both decks, a result, and a Basic starter for each side.",
@@ -95,6 +187,10 @@ export function MatchForm({
           opponent_starter_id: theirStarter,
           played_at: match?.played_at ?? new Date().toISOString(),
           notes,
+          combat_log: mode === "log" ? combatLog : (match?.combat_log ?? ""),
+          log_player: mode === "log" ? logPlayer : (match?.log_player ?? ""),
+          card_back: cardBack,
+          opponent_card_back: opponentBack,
           prizes: selected,
         }),
       () => {
@@ -115,6 +211,7 @@ export function MatchForm({
       description="Save the result and the opening details worth remembering."
       onClose={onClose}
       busy={mutation.pending}
+      closeOnBackdrop={mode === "log"}
     >
       <form
         className="form-stack"
@@ -124,6 +221,84 @@ export function MatchForm({
         }}
       >
         <fieldset disabled={mutation.pending} className="form-stack">
+          <div className="flex gap-2" aria-label="Match entry mode">
+            <Button
+              type="button"
+              variant={mode === "log" ? "default" : "outline"}
+              onClick={() => setMode("log")}
+            >
+              Import combat log
+            </Button>
+            <Button
+              type="button"
+              variant={mode === "manual" ? "default" : "outline"}
+              onClick={() => setMode("manual")}
+            >
+              Add manually
+            </Button>
+          </div>
+          {mode === "log" && (
+            <div className="form-stack">
+              <label className="field-label">
+                Combat log
+                <textarea
+                  aria-label="Combat log"
+                  rows={7}
+                  maxLength={200000}
+                  placeholder="Paste the complete English battle log, starting with Setup?"
+                  value={combatLog}
+                  onChange={(e) => importLog(e.target.value)}
+                />
+              </label>
+              <ErrorMessage error={logError} />
+              {parsed && (
+                <>
+                  <RegexCombobox
+                    label="Your player"
+                    value={logPlayer}
+                    options={parsed.players.map((p) => ({
+                      value: p,
+                      label: p,
+                    }))}
+                    onChange={(p) => applyLog(parsed, p)}
+                  />
+                  <p className="field-hint">
+                    Named prize reveals suggest{" "}
+                    {parsed.perspective ?? "no unique player"}. Confirm your
+                    identity; you can correct every inferred field below.
+                  </p>
+                  <div className="form-grid">
+                    <RegexCombobox
+                      label="Your card back"
+                      value={cardBack}
+                      options={CARD_BACKS}
+                      onChange={setCardBack}
+                    />
+                    <RegexCombobox
+                      label="Opponent card back"
+                      value={opponentBack}
+                      options={CARD_BACKS}
+                      onChange={setOpponentBack}
+                    />
+                  </div>
+                  {parsed.coin && (
+                    <p className="field-hint">
+                      Opening coin: {parsed.coin.chooser} chose{" "}
+                      {parsed.coin.choice}.{" "}
+                      {parsed.coin.outcome ?? "Unknown outcome"}; winner:{" "}
+                      {parsed.coin.winner ?? "Unknown"}. First:{" "}
+                      {parsed.coin.first ?? "Unknown"}.
+                    </p>
+                  )}
+                  {parsed.warnings.map((w) => (
+                    <p className="field-hint" key={w}>
+                      {w}
+                    </p>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
           <div className="form-grid">
             <RegexCombobox
               label="Your deck"
@@ -133,6 +308,8 @@ export function MatchForm({
                 setDeckId(v);
                 setStarter("");
                 setPrizes(Array(6).fill(""));
+                if (parsed && logPlayer && mode === "log")
+                  applyLog(parsed, logPlayer, v);
               }}
             />
             <RegexCombobox
@@ -142,6 +319,8 @@ export function MatchForm({
               onChange={(v) => {
                 setOpponentId(v);
                 setTheirStarter("");
+                if (parsed && logPlayer && mode === "log")
+                  applyLog(parsed, logPlayer, deckId, v);
               }}
             />
           </div>
@@ -229,7 +408,7 @@ export function MatchForm({
                 <div key={index} className="prize-slot">
                   <RegexCombobox
                     label={`Prize ${index + 1}`}
-                    placeholder="Unknown / not recorded"
+                    placeholder="Unknown prize card"
                     disabled={!deckId}
                     value={value}
                     clearable
@@ -267,9 +446,9 @@ export function MatchForm({
             </div>
           </div>
           <label className="field-label">
-            Match notes
+            Match notes ({notes.length}/200)
             <textarea
-              maxLength={50000}
+              maxLength={200}
               rows={3}
               placeholder="What worked? What would you change?"
               value={notes}

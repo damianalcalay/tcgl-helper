@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { CARD_TYPES, CardType, DeckInput, MatchInput } from "@/types/domain";
 import { validateQuantities } from "@/lib/domain/logic";
 import { validPrintings } from "@/lib/domain/deck-import";
+import { parseCombatLog } from "@/lib/domain/combat-log";
 export type ActionResult =
   { success: true; id?: string } | { success: false; error: string };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -183,6 +184,37 @@ export async function saveDeck(input: DeckInput): Promise<ActionResult> {
   }
 }
 export async function saveMatch(input: MatchInput): Promise<ActionResult> {
+  if (typeof input?.notes === "string" && input.notes.length > 200)
+    return {
+      success: false,
+      error: "Match notes must be at most 200 characters.",
+    };
+  if (
+    [input?.card_back, input?.opponent_card_back].some(
+      (back) =>
+        back !== undefined && !["classic", "teal", "ruby"].includes(back),
+    )
+  )
+    return { success: false, error: "Choose a valid card back." };
+  let coinWon: boolean | null = null;
+  if (input?.combat_log) {
+    try {
+      const parsed = parseCombatLog(input.combat_log);
+      if (!parsed.players.includes(input.log_player ?? ""))
+        return {
+          success: false,
+          error: "Choose Your player from the combat log.",
+        };
+      coinWon = parsed.coin?.winner
+        ? parsed.coin.winner === input.log_player
+        : null;
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Invalid combat log.",
+      };
+    }
+  }
   if (
     !input ||
     (input.id && !id(input.id)) ||
@@ -201,7 +233,8 @@ export async function saveMatch(input: MatchInput): Promise<ActionResult> {
     !input.prizes.every(id) ||
     typeof input.played_at !== "string" ||
     !Number.isFinite(Date.parse(input.played_at)) ||
-    !text(input.notes)
+    !text(input.notes) ||
+    input.notes.length > 200
   )
     return {
       success: false,
@@ -210,7 +243,22 @@ export async function saveMatch(input: MatchInput): Promise<ActionResult> {
     };
   try {
     const client = await authenticated();
-    const { data, error } = await client.rpc("save_match", { payload: input });
+    if (input.combat_log !== undefined) {
+      const { error } = await client
+        .from("matches")
+        .select("combat_log")
+        .limit(0);
+      if (error?.code === "42703")
+        return {
+          success: false,
+          error:
+            "Install 20261005_combat_logs.sql in Supabase before saving combat logs.",
+        };
+      if (error) throw error;
+    }
+    const { data, error } = await client.rpc("save_match", {
+      payload: { ...input, coin_won: coinWon },
+    });
     if (error) throw error;
     refresh();
     return { success: true, id: data };

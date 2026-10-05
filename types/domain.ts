@@ -115,6 +115,11 @@ export interface Variant {
 }
 export type Result = "win" | "loss" | "draw";
 export interface Match {
+  combat_log?: string;
+  log_player?: string;
+  coin_won?: boolean | null;
+  card_back?: string;
+  opponent_card_back?: string;
   id: string;
   deck_id: string;
   opponent_deck_id: string;
@@ -131,6 +136,7 @@ export interface Match {
   updated_at: string;
 }
 export interface Roster {
+  printings?: CardPrinting[];
   match_id: string;
   side: "mine" | "opponent";
   card_id: string;
@@ -163,6 +169,10 @@ export interface DeckInput {
   new_cards?: { id: string; name: string; type: CardType }[];
 }
 export interface MatchInput {
+  combat_log?: string;
+  log_player?: string;
+  card_back?: string;
+  opponent_card_back?: string;
   id?: string;
   deck_id: string;
   opponent_deck_id: string;

@@ -186,7 +186,13 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await second.click();
   await second.click();
   await choose(page, "Game result", "Win");
-  await page.getByRole("button", { name: "Add Match", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Add Match", exact: true })
+    .first()
+    .click();
+  await page.getByRole("button", { name: "Add manually", exact: true }).click();
+  await page.mouse.click(10, 10);
+  await expect(page.getByRole("dialog", {name:"Add a match"})).toBeVisible();
   await expect(
     page.getByRole("combobox", { name: "Your deck", exact: true }),
   ).toContainText("Deck Alpha");
@@ -224,7 +230,7 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   for (let i = 3; i <= 6; i++) await choose(page, `Prize ${i}`, "Test Item");
   await page.getByRole("button", { name: "Save match", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("status")).toContainText(
+  await expect(page.getByRole("status").first()).toContainText(
     "Match saved to your statistics.",
   );
   await expect(first).toHaveAttribute(
@@ -652,4 +658,150 @@ test("imports a deck, creates missing cards and saves thirteen Energy copies", a
     .click();
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+import { readFileSync } from "node:fs";
+
+test("combat log inference, perspective correction, full-screen save and board replay", async ({
+  page,
+  request,
+}) => {
+  const endpoint = "http://localhost:54329/rest/v1";
+  const names = [
+    "Applin",
+    "Fezandipiti ex",
+    "Poké Pad",
+    "Hydrapple ex",
+    "Bug Catching Set",
+    "Forest of Vitality",
+    "Meganium",
+    "Basic {G} Energy",
+  ];
+  const types = [
+    "basic",
+    "basic_ex",
+    "item",
+    "stage_2_ex",
+    "item",
+    "stadium",
+    "stage_2",
+    "energy_basic",
+  ];
+  const ids: string[] = [];
+  for (let i = 0; i < names.length; i++) {
+    const response = await request.post(`${endpoint}/cards`, {
+      data: { name: names[i], type: types[i] },
+      headers: { Accept: "application/vnd.pgrst.object+json" },
+    });
+    expect(response.ok()).toBeTruthy();
+    ids.push((await response.json()).id);
+  }
+  const deckResponse = await request.post(`${endpoint}/rpc/save_deck`, {
+    data: {
+      payload: {
+        name: "Combat fixture deck",
+        notes: "",
+        cards: ids.map((id, i) => ({
+          card_id: id,
+          quantity: i === 7 ? 13 : i === 4 ? 2 : 1,
+          printings: [
+            {
+              quantity: i === 7 ? 13 : i === 4 ? 2 : 1,
+              set_code: "TWM",
+              collector_number: String(i + 1),
+              image_url: `https://assets.tcgdex.net/en/sv/sv06/${i + 1}/high.webp`,
+            },
+          ],
+        })),
+      },
+    },
+  });
+  expect(deckResponse.ok(), await deckResponse.text()).toBeTruthy();
+  const deck = await deckResponse.json();
+  await page.route("https://assets.tcgdex.net/**", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="245" height="337"><rect width="245" height="337" fill="#abd5b9"/><circle cx="122" cy="110" r="65" fill="#417b54"/></svg>',
+    }),
+  );
+  await page.goto("/auth/login");
+  await page.getByLabel("Email", { exact: true }).fill("fixture@example.test");
+  await page.getByLabel("Password", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Login", exact: true }).click();
+  await expect(page).toHaveURL(/\/decks$/);
+  await page.goto(`/notebook?deck=${deck}`);
+  await page.getByRole("button", { name: "Full screen game mode" }).click();
+  await page
+    .getByRole("region", { name: "Prize cards" })
+    .getByRole("button", { name: "Add Match" })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Add a match" });
+  await dialog
+    .getByLabel("Combat log", { exact: true })
+    .fill(readFileSync("tests/fixtures/combat-log.txt", "utf8"));
+  await expect(
+    dialog.getByRole("combobox", { name: "Your player", exact: true }),
+  ).toContainText("Ciberbrian");
+  await expect(
+    dialog.getByRole("combobox", { name: "Result", exact: true }),
+  ).toContainText("Win");
+  await choose(page, "Your player", "bastorz");
+  await expect(
+    dialog.getByRole("combobox", { name: "Result", exact: true }),
+  ).toContainText("Loss");
+  await expect(
+    dialog.getByRole("combobox", { name: "Your prizes taken", exact: true }),
+  ).toContainText("2");
+  await expect(
+    dialog.getByRole("combobox", {
+      name: "Opponent prizes taken",
+      exact: true,
+    }),
+  ).toContainText("6");
+  await expect(
+    dialog.getByRole("combobox", { name: /^Your starter/ }),
+  ).toContainText("Fezandipiti ex");
+  await expect(
+    dialog.getByRole("combobox", { name: /^Opponent starter/ }),
+  ).toContainText("Applin");
+  await expect(
+    dialog.getByRole("combobox", { name: "Prize 1", exact: true }),
+  ).toContainText("Unknown prize card");
+  await dialog.getByRole("button", { name: "Save match", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator(".notebook-workspace")).toHaveClass(
+    /notebook-game-mode/,
+  );
+  await page
+    .getByRole("region", { name: "Prize cards" })
+    .getByRole("button", { name: "Play again" })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Reset game", exact: true })
+    .click();
+  await expect(page.locator(".notebook-workspace")).toHaveClass(
+    /notebook-game-mode/,
+  );
+  await page.goto("/stats");
+  await expect(
+    page.getByText("Opening coin win rate", { exact: true }),
+  ).toBeVisible();
+  const row = page
+    .getByRole("row")
+    .filter({ hasText: "Combat fixture deck" })
+    .first();
+  await row.getByRole("button", { name: /Details/ }).click();
+  await page.getByRole("button", { name: "View combat log" }).click();
+  await expect(page.getByRole("dialog", { name: "Combat log" })).toBeVisible();
+  await expect(
+    page.getByText("- Ciberbrian discarded 2 cards.", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Board replay", exact: true }).click();
+  await page.getByLabel("Replay action", { exact: true }).fill("14");
+  await expect(page.locator(".replay-board")).toBeVisible();
+  await page.getByRole("button", { name: "Next action" }).click();
+  await page.getByRole("button", { name: "Previous action" }).click();
+  await page.getByLabel("Replay speed").selectOption("2");
+  await page.screenshot({ path: "test-results/combat-replay.png" });
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
 });
