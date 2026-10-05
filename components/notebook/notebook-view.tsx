@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, useEffect, useState } from "react";
+import { CSSProperties, Fragment, useEffect, useState } from "react";
 import {
   RotateCcw,
   Layers3,
@@ -310,28 +310,40 @@ export function NotebookView({ data }: { data: AppData }) {
                     .map((c, index, rows) => (
                       <Fragment key={`${c.id}:${c.offset}`}>
                         <div
-                          className={`tracker-row ${cardGroup(c.type) === "Energy" ? "tracker-energy" : ""}`}
+                          className={`tracker-row ${cardGroup(c.type) === "Energy" && c.quantity > 4 ? "tracker-energy" : ""}`}
                           style={
-                            cardGroup(c.type) === "Energy"
-                              ? {
+                            cardGroup(c.type) === "Energy" && c.quantity > 4
+                              ? ({
                                   gridColumn: `span ${Math.min(4, 1 + Math.ceil((Math.ceil(c.quantity / 6) * 27) / 100))}`,
-                                }
+                                  "--energy-span": Math.min(
+                                    4,
+                                    1 +
+                                      Math.ceil(
+                                        (Math.ceil(c.quantity / 6) * 27) / 100,
+                                      ),
+                                  ),
+                                } as CSSProperties)
                               : undefined
                           }
                           key={`${c.id}:${c.offset}`}
                         >
-                          {(index === 0 ||
-                            cardGroup(rows[index - 1].type) !==
-                              cardGroup(c.type)) && (
-                            <h3 className="tracker-group-heading">
-                              {cardGroup(c.type)}
-                            </h3>
-                          )}
-                          <PrintingImages
-                            printings={c.printings}
-                            name={c.name}
-                          />
-                          <span className="quantity-badge">x{c.quantity}</span>
+                          {cardGroup(c.type) !== "Energy" &&
+                            (index === 0 ||
+                              cardGroup(rows[index - 1].type) !==
+                                cardGroup(c.type)) && (
+                              <h3 className="tracker-group-heading">
+                                {cardGroup(c.type)}
+                              </h3>
+                            )}
+                          <div className="tracker-artwork">
+                            <PrintingImages
+                              printings={c.printings}
+                              name={c.name}
+                            />
+                            <span className="quantity-badge">
+                              x{c.quantity}
+                            </span>
+                          </div>
                           <div className="tracker-card-name">
                             <strong>{c.name}</strong>
                             <small>{CARD_TYPES[c.type]}</small>
@@ -339,7 +351,7 @@ export function NotebookView({ data }: { data: AppData }) {
                           <div
                             className="copy-controls"
                             style={
-                              cardGroup(c.type) === "Energy"
+                              cardGroup(c.type) === "Energy" && c.quantity > 4
                                 ? {
                                     gridTemplateRows: `repeat(${Math.min(6, c.quantity)}, 24px)`,
                                   }

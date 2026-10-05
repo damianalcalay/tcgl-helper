@@ -2058,12 +2058,13 @@
 }
 .notebook-workspace .tracker-list .tracker-energy {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  column-gap: 8px;
+  grid-template-columns: calc(
+      (100% - (var(--energy-span) - 1) * 8px) / var(--energy-span)
+    ) max-content;
+  column-gap: 6px;
   align-items: start;
 }
-.tracker-energy > .printing-images,
-.tracker-energy > .field-hint {
+.tracker-energy > .tracker-artwork {
   grid-column: 1;
   grid-row: 1;
 }
@@ -2081,15 +2082,27 @@
   margin: 0;
   gap: 3px;
 }
-.notebook-workspace .tracker-list .tracker-energy > .quantity-badge {
-  right: auto;
-  left: 3px;
-}
 @media (max-width: 1100px) {
   .notebook-workspace .tracker-list .tracker-energy {
     grid-column: span 2 !important;
+    --energy-span: 2 !important;
   }
 }
-.notebook-workspace .tracker-list .tracker-energy > .quantity-badge {
-  top: 21px;
+
+.tracker-artwork {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+.notebook-workspace .tracker-energy .tracker-card-name {
+  text-align: center;
+}
+.notebook-workspace .tracker-energy .tracker-card-name strong {
+  display: block;
+}
+.notebook-game-mode .tracker-energy {
+  grid-template-columns: min(
+      calc((100% - (var(--energy-span) - 1) * 8px) / var(--energy-span)),
+      calc(clamp(100px, 18vh, 190px) * 245 / 337)
+    ) max-content;
 }

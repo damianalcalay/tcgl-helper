@@ -559,7 +559,7 @@ test("imports a deck, creates missing cards and saves thirteen Energy copies", a
   });
   await expect(manualPrize.getByRole("img")).toHaveAttribute("src", /cards/);
   await manualPrize.click();
-  await expect(page.locator(".tracker-group-heading")).toHaveCount(3);
+  await expect(page.locator(".tracker-group-heading")).toHaveCount(2);
   await expect(
     page.getByRole("button", { name: "Enlarge Imported Ogerpon ex TWM 025" }),
   ).toBeVisible();
