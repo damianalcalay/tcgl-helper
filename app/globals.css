@@ -1835,3 +1835,219 @@
 .editor-card {
   flex-wrap: wrap;
 }
+/* Compact deck overview and live game workspace. */
+.deck-mosaic,
+.notebook-workspace .tracker-list {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+}
+.deck-mosaic-card {
+  position: relative;
+  min-width: 0;
+  padding-bottom: 14px;
+}
+.deck-mosaic figcaption,
+.notebook-workspace .printing-images figcaption {
+  display: none;
+}
+.mosaic-quantity {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  border: 2px solid hsl(var(--border));
+  font-weight: 700;
+  box-shadow: 0 2px 5px #0004;
+}
+.notebook-workspace .notebook-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+  align-items: start;
+}
+.game-mode-toolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.notebook-workspace .tracker-panel {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+}
+.notebook-workspace .notebook-prizes {
+  grid-column: 2;
+  grid-row: 2;
+  position: sticky;
+  top: 12px;
+  margin: 0;
+  padding: 12px;
+}
+.notebook-prizes .panel-heading {
+  padding: 0 0 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.notebook-prizes .panel-heading h2 {
+  font-size: 16px;
+}
+.notebook-prizes .panel-heading p {
+  font-size: 11px;
+}
+.notebook-prizes .prize-card-list {
+  padding: 4px;
+  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.notebook-prizes .prize-thumbnail {
+  width: 100%;
+  min-width: 0;
+  padding: 4px;
+  font-size: 10px;
+}
+.notebook-prizes .prize-thumbnail img,
+.notebook-prizes .prize-image-placeholder {
+  width: 100%;
+}
+.notebook-prizes .prize-remove-label {
+  display: none;
+}
+.notebook-workspace .tracker-list .tracker-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 0 6px;
+  border: 0;
+  position: relative;
+}
+.tracker-group-heading {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: hsl(var(--muted-foreground));
+}
+.notebook-workspace .tracker-card-name strong {
+  font-size: 10px;
+  line-height: 1.2;
+}
+.notebook-workspace .tracker-card-name small {
+  display: none;
+}
+.notebook-workspace .tracker-list .quantity-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  font-size: 10px;
+  min-width: 22px;
+  padding: 2px 4px;
+  background: hsl(var(--background) / 0.9);
+}
+.notebook-workspace .tracker-list .copy-controls {
+  flex: initial;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.notebook-workspace .tracker-list .copy-button {
+  min-width: 24px;
+  min-height: 24px;
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+.notebook-workspace .notebook-reference {
+  grid-column: 1 / -1;
+}
+.notebook-game-mode {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: hsl(var(--background));
+  padding: 12px;
+  overflow: auto;
+}
+.notebook-game-mode > :not(.notebook-grid):not(dialog) {
+  display: none;
+}
+.notebook-game-mode .notebook-reference,
+.notebook-game-mode .panel-footnote,
+.notebook-game-mode .tracker-search {
+  display: none;
+}
+.notebook-game-mode .tracker-panel .panel-heading {
+  display: none;
+}
+.notebook-game-mode .tracker-legend {
+  padding: 8px 12px;
+}
+.notebook-game-mode .printing-image-button img {
+  max-height: clamp(100px, 20vh, 210px);
+}
+.notebook-game-mode .printing-image-placeholder {
+  max-height: 20vh;
+  padding: 4px;
+  font-size: 10px;
+}
+@media (max-width: 1100px) {
+  .deck-mosaic,
+  .notebook-workspace .tracker-list {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .deck-mosaic,
+  .notebook-workspace .tracker-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .notebook-workspace .notebook-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .notebook-workspace .notebook-prizes {
+    grid-column: 1;
+    grid-row: 2;
+    position: static;
+  }
+  .notebook-workspace .tracker-panel {
+    grid-row: 3;
+  }
+  .notebook-prizes .prize-card-list {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+.notebook-workspace {
+  display: flex;
+  flex-direction: column;
+}
+.notebook-workspace > .notebook-match-panel {
+  order: 1;
+  margin-top: 16px;
+}
+.notebook-workspace > .notebook-grid {
+  flex-shrink: 0;
+}
+.notebook-workspace .tracker-list .tracker-row {
+  padding-top: 18px;
+}
+.tracker-group-heading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  font-size: 10px;
+}
+.notebook-game-mode .printing-image-button img {
+  max-height: clamp(100px, 18vh, 190px);
+}

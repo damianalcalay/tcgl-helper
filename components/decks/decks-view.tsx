@@ -25,7 +25,7 @@ import { ConfirmDialog } from "@/components/shared/modal";
 import { useMutation } from "@/components/shared/use-mutation";
 import { DeckForm } from "./deck-form";
 import { CardForm } from "./card-form";
-import { DeckImageViewer } from "./deck-image-viewer";
+import { DeckMosaic } from "./deck-mosaic";
 export function DecksView({ data }: { data: AppData }) {
   const params = useSearchParams();
   const [tab, setTab] = useState<"decks" | "cards">("decks");
@@ -243,14 +243,7 @@ export function DecksView({ data }: { data: AppData }) {
                   Edit deck
                 </Button>
               </div>
-              {selected.image_url && (
-                <div className="deck-reference-image">
-                  <DeckImageViewer
-                    url={selected.image_url}
-                    name={selected.name}
-                  />
-                </div>
-              )}
+              <DeckMosaic cards={deckRoster(data, selected.id)} />
               <div className="detail-grid">
                 <div>
                   <h3 className="subheading">

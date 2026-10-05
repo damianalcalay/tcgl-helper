@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   RotateCcw,
   Layers3,
@@ -20,7 +20,7 @@ import { ConfirmDialog } from "@/components/shared/modal";
 import { PageHeader, EmptyState } from "@/components/shared/page-parts";
 import { MatchForm } from "@/components/stats/match-form";
 import { TrackerSearch } from "./tracker-search";
-import { DeckImageViewer } from "@/components/decks/deck-image-viewer";
+import { cardGroup, sortedRoster } from "@/components/decks/deck-mosaic";
 import {
   PrintingImages,
   PrizeThumbnail,
@@ -29,6 +29,20 @@ import { resizePrintings } from "@/lib/domain/deck-import";
 type State = 0 | 1 | 2;
 const states = ["Available", "Discard pile", "Prizes"] as const;
 export function NotebookView({ data }: { data: AppData }) {
+  const [gameMode, setGameMode] = useState(false);
+  useEffect(() => {
+    if (!gameMode) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setGameMode(false);
+    };
+    window.addEventListener("keydown", escape);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", escape);
+    };
+  }, [gameMode]);
   const params = useSearchParams();
   const [deckId, setDeckId] = useState(params.get("deck") ?? "");
   const [copies, setCopies] = useState<Record<string, State>>({});
@@ -43,7 +57,7 @@ export function NotebookView({ data }: { data: AppData }) {
   const [matchError, setMatchError] = useState("");
   const [visibleIds, setVisibleIds] = useState<string[] | null>(null);
   const deck = data.decks.find((d) => d.id === deckId);
-  const roster = deckRoster(data, deckId);
+  const roster = sortedRoster(deckRoster(data, deckId));
   const trackerRows = roster.flatMap((c) => {
     const printings = resizePrintings(c.printings, c.quantity);
     if (!printings.length) return [{ ...c, offset: 0 }];
@@ -98,7 +112,9 @@ export function NotebookView({ data }: { data: AppData }) {
     setMatchForm({ deck_id: deckId, result, prizes });
   }
   return (
-    <>
+    <div
+      className={`notebook-workspace ${gameMode ? "notebook-game-mode" : ""}`}
+    >
       <PageHeader
         eyebrow="YOUR GAME COMPANION"
         title="Notebook"
@@ -175,35 +191,6 @@ export function NotebookView({ data }: { data: AppData }) {
               ))}
             </div>
           </div>
-          <section className="panel notebook-prizes" aria-label="Prize cards">
-            <div className="panel-heading">
-              <div>
-                <h2>Prize cards</h2>
-                <p>Click a card to return that copy to Available.</p>
-              </div>
-              <span className="count-pill" aria-live="polite">
-                {prizeCopies.length} / 6 prizes
-              </span>
-            </div>
-            {prizeCopies.length ? (
-              <div className="prize-card-list">
-                {prizeCopies.map((copy) => (
-                  <PrizeThumbnail
-                    key={copy.key}
-                    name={copy.name}
-                    printing={copy.printing}
-                    copyNumber={copy.copyNumber}
-                    onRemove={() => {
-                      setCopies((current) => ({ ...current, [copy.key]: 0 }));
-                      setMatchError("");
-                    }}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="inline-empty">No copies marked as Prizes yet.</p>
-            )}
-          </section>
           <section className="panel notebook-match-panel">
             <div>
               <h3>Record this game</h3>
@@ -244,12 +231,43 @@ export function NotebookView({ data }: { data: AppData }) {
               </p>
             )}
           </section>
-          {deck.image_url && (
-            <section className="panel deck-reference-image">
-              <DeckImageViewer url={deck.image_url} name={deck.name} />
-            </section>
-          )}
           <div className="notebook-grid">
+            <div className="game-mode-toolbar">
+              <strong>{deck.name}</strong>
+              <Button variant="outline" onClick={() => setGameMode(!gameMode)}>
+                {gameMode ? "Exit full screen" : "Full screen game mode"}
+              </Button>
+            </div>
+            <section className="panel notebook-prizes" aria-label="Prize cards">
+              <div className="panel-heading">
+                <div>
+                  <h2>Prize cards</h2>
+                  <p>Click a card to return that copy to Available.</p>
+                </div>
+                <span className="count-pill" aria-live="polite">
+                  {prizeCopies.length} / 6 prizes
+                </span>
+              </div>
+              {prizeCopies.length ? (
+                <div className="prize-card-list">
+                  {prizeCopies.map((copy) => (
+                    <PrizeThumbnail
+                      key={copy.key}
+                      name={copy.name}
+                      printing={copy.printing}
+                      copyNumber={copy.copyNumber}
+                      onRemove={() => {
+                        setCopies((current) => ({ ...current, [copy.key]: 0 }));
+                        setMatchError("");
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="inline-empty">No copies marked as Prizes yet.</p>
+              )}
+            </section>
+
             <section className="panel tracker-panel">
               <div className="panel-heading">
                 <div>
@@ -289,38 +307,53 @@ export function NotebookView({ data }: { data: AppData }) {
                     .filter(
                       (c) => visibleIds === null || visibleIds.includes(c.id),
                     )
-                    .map((c) => (
-                      <div className="tracker-row" key={`${c.id}:${c.offset}`}>
-                        <PrintingImages printings={c.printings} name={c.name} />
-                        <span className="quantity-badge">x{c.quantity}</span>
-                        <div className="tracker-card-name">
-                          <strong>{c.name}</strong>
-                          <small>{CARD_TYPES[c.type]}</small>
+                    .map((c, index, rows) => (
+                      <Fragment key={`${c.id}:${c.offset}`}>
+                        <div
+                          className="tracker-row"
+                          key={`${c.id}:${c.offset}`}
+                        >
+                          {(index === 0 ||
+                            cardGroup(rows[index - 1].type) !==
+                              cardGroup(c.type)) && (
+                            <h3 className="tracker-group-heading">
+                              {cardGroup(c.type)}
+                            </h3>
+                          )}
+                          <PrintingImages
+                            printings={c.printings}
+                            name={c.name}
+                          />
+                          <span className="quantity-badge">x{c.quantity}</span>
+                          <div className="tracker-card-name">
+                            <strong>{c.name}</strong>
+                            <small>{CARD_TYPES[c.type]}</small>
+                          </div>
+                          <div className="copy-controls">
+                            {Array.from({ length: c.quantity }, (_, i) => {
+                              const copyNumber = c.offset + i;
+                              const key = `${deckId}:${c.id}:${copyNumber}`;
+                              const state = copies[key] ?? 0;
+                              return (
+                                <button
+                                  key={key}
+                                  className={`copy-button state-${state}`}
+                                  onClick={() =>
+                                    setCopies((cs) => ({
+                                      ...cs,
+                                      [key]: ((state + 1) % 3) as State,
+                                    }))
+                                  }
+                                  title={`${c.name} · Copy ${copyNumber + 1}: ${states[state]}. Click for ${states[(state + 1) % 3]}.`}
+                                  aria-label={`${c.name} copy ${copyNumber + 1}: ${states[state]}. Change to ${states[(state + 1) % 3]}.`}
+                                >
+                                  <span>{copyNumber + 1}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                        <div className="copy-controls">
-                          {Array.from({ length: c.quantity }, (_, i) => {
-                            const copyNumber = c.offset + i;
-                            const key = `${deckId}:${c.id}:${copyNumber}`;
-                            const state = copies[key] ?? 0;
-                            return (
-                              <button
-                                key={key}
-                                className={`copy-button state-${state}`}
-                                onClick={() =>
-                                  setCopies((cs) => ({
-                                    ...cs,
-                                    [key]: ((state + 1) % 3) as State,
-                                  }))
-                                }
-                                title={`${c.name} · Copy ${copyNumber + 1}: ${states[state]}. Click for ${states[(state + 1) % 3]}.`}
-                                aria-label={`${c.name} copy ${copyNumber + 1}: ${states[state]}. Change to ${states[(state + 1) % 3]}.`}
-                              >
-                                <span>{copyNumber + 1}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      </Fragment>
                     ))}
                 </div>
               ) : (
@@ -420,6 +453,6 @@ export function NotebookView({ data }: { data: AppData }) {
           }}
         />
       )}
-    </>
+    </div>
   );
 }

@@ -113,23 +113,10 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await choose(page, "Card", "Test Evolution");
   await choose(page, "Copies to add", "1");
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await page.getByLabel("Deck reference image").setInputFiles({
-    name: "deck.png",
-    mimeType: "image/png",
-    buffer: Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=",
-      "base64",
-    ),
-  });
+  await expect(page.getByLabel("Deck reference image")).toHaveCount(0);
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Open image of Deck Alpha", exact: true })
-    .click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
-  await expect(page.getByText("125%", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(page.getByLabel("Generated deck overview")).toBeVisible();
   await createDeck(page, "Deck Beta", 1);
   await page.getByRole("combobox", { name: "Find a deck" }).click();
   await page.getByRole("option", { name: "Deck Alpha", exact: true }).click();
@@ -572,10 +559,10 @@ test("imports a deck, creates missing cards and saves thirteen Energy copies", a
   });
   await expect(manualPrize.getByRole("img")).toHaveAttribute("src", /cards/);
   await manualPrize.click();
+  await expect(page.locator(".tracker-group-heading")).toHaveCount(3);
   await expect(
-    page.getByText("Twilight Masquerade", { exact: true }).first(),
+    page.getByRole("button", { name: "Enlarge Imported Ogerpon ex TWM 025" }),
   ).toBeVisible();
-  await expect(page.getByText(/TWM · #025 · Regulation H/)).toBeVisible();
   await page
     .getByRole("button", { name: "Enlarge Imported Ogerpon ex TWM 025" })
     .click();
@@ -595,6 +582,25 @@ test("imports a deck, creates missing cards and saves thirteen Energy copies", a
   await expect(
     page.getByRole("button", { name: /Imported Ogerpon ex copy 1: Prizes/ }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Full screen game mode" }).click();
+  await expect(page.locator(".notebook-workspace")).toHaveClass(
+    /notebook-game-mode/,
+  );
+  await expect(
+    page.getByRole("button", { name: /Imported Ogerpon ex copy 1: Prizes/ }),
+  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Prize cards" })).toBeVisible();
+  const columns = await page
+    .locator(".tracker-list")
+    .evaluate(
+      (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length,
+    );
+  expect(columns).toBe(10);
+  await page.screenshot({ path: "test-results/notebook-game-mode.png" });
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".notebook-workspace")).not.toHaveClass(
+    /notebook-game-mode/,
+  );
   const prizePanel = page.getByRole("region", { name: "Prize cards" });
   const removePrize = prizePanel.getByRole("button", {
     name: "Remove Imported Ogerpon ex copy 1 from Prizes",
@@ -637,7 +643,9 @@ test("imports a deck, creates missing cards and saves thirteen Energy copies", a
   });
   await page.reload();
   await choose(page, "Active deck", "Imported deck");
-  await expect(page.getByText(/TWM · #025 · Regulation H/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Enlarge Imported Ogerpon ex TWM 025" }),
+  ).toBeVisible();
   await page.goto("/decks");
   await page
     .getByRole("button", { name: "Delete Imported deck", exact: true })

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Plus, Trash2, Upload, X, Loader2 } from "lucide-react";
+import { Plus, Trash2, X, Loader2 } from "lucide-react";
 import {
   AppData,
   CARD_TYPES,
@@ -174,24 +174,8 @@ export function DeckForm({
   }
   const [selected, setSelected] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [file, setFile] = useState<File | null>(null);
-  const [draggingImage, setDraggingImage] = useState(false);
-  const [removeImage, setRemoveImage] = useState(false);
   const mutation = useMutation();
   const total = cards.reduce((s, c) => s + c.quantity, 0);
-  function selectImage(image: File) {
-    if (mutation.pending) return;
-    if (
-      image.size > 20 * 1024 * 1024 ||
-      !["image/png", "image/jpeg", "image/webp"].includes(image.type)
-    ) {
-      mutation.setError("Choose a PNG, JPEG, or WebP image up to 20 MB.");
-      return;
-    }
-    setFile(image);
-    setRemoveImage(false);
-    mutation.setError("");
-  }
   function addCard() {
     if (!selected) return mutation.setError("Select a card first.");
     const existing = cards.find((c) => c.card_id === selected);
@@ -265,38 +249,7 @@ export function DeckForm({
             printing.image_url = undefined;
           }
         }
-        let imagePath = removeImage ? null : (deck?.image_path ?? null);
-        let uploaded: string | null = null;
-        if (file) {
-          const client = createClient();
-          const { data: auth } = await client.auth.getUser();
-          if (!auth.user)
-            return {
-              success: false,
-              error: "Sign in again to upload an image.",
-            };
-          const extension =
-            file.type === "image/png"
-              ? "png"
-              : file.type === "image/webp"
-                ? "webp"
-                : "jpg";
-          uploaded = `${auth.user.id}/${crypto.randomUUID()}.${extension}`;
-          const { error } = await client.storage
-            .from("deck-images")
-            .upload(uploaded, file, { contentType: file.type, upsert: false });
-          if (error) {
-            if (uploadedCards.length)
-              await client.storage.from("deck-images").remove(uploadedCards);
-            console.error("Image upload failed", error);
-            return {
-              success: false,
-              error:
-                "Unable to upload the image. Check the Storage bucket setup and try again.",
-            };
-          }
-          imagePath = uploaded;
-        }
+        const imagePath = null;
         const result = await saveDeck({
           id: deck?.id,
           name,
@@ -310,8 +263,6 @@ export function DeckForm({
             type: c.type as keyof typeof CARD_TYPES,
           })),
         });
-        if (!result.success && uploaded)
-          await createClient().storage.from("deck-images").remove([uploaded]);
         if (!result.success && uploadedCards.length)
           await client.storage.from("deck-images").remove(uploadedCards);
         if (result.success && deck?.image_path && deck.image_path !== imagePath)
@@ -579,65 +530,10 @@ export function DeckForm({
               </span>
             ))}
           </div>
-          <label className="field-label">
-            Deck image{" "}
-            <span className="font-normal text-muted-foreground">
-              PNG, JPEG or WebP · up to 20 MB
-            </span>
-            <div
-              className={`upload-zone ${draggingImage ? "upload-zone-active" : ""}`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                if (!mutation.pending) setDraggingImage(true);
-              }}
-              onDragLeave={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node | null))
-                  setDraggingImage(false);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDraggingImage(false);
-                if (e.dataTransfer.files.length !== 1) {
-                  mutation.setError("Drop one deck image at a time.");
-                  return;
-                }
-                selectImage(e.dataTransfer.files[0]);
-              }}
-            >
-              <Upload size={22} />
-              <span>Drag and drop an image here, or choose a file.</span>
-              <input
-                type="file"
-                aria-label="Deck reference image"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  selectImage(f);
-                  e.target.value = "";
-                }}
-              />
-              <span>
-                {file?.name ??
-                  (deck?.image_path && !removeImage
-                    ? "Existing image will be kept."
-                    : "Upload a full-resolution deck screenshot.")}
-              </span>
-            </div>
-          </label>
-          {(file || (deck?.image_path && !removeImage)) && (
-            <Button
-              type="button"
-              variant="ghost"
-              className="self-start"
-              onClick={() => {
-                setFile(null);
-                setRemoveImage(true);
-              }}
-            >
-              Remove image
-            </Button>
-          )}
+          <p className="field-hint">
+            Your deck overview is generated automatically from its card images
+            and quantities.
+          </p>
         </fieldset>
         <ErrorMessage error={mutation.error} />
         <div className="form-actions">
