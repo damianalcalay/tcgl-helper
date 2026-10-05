@@ -23,7 +23,12 @@ export function matchCardImage(
     (r) =>
       r.match_id === match.id && cardNameKey(r.card_name) === cardNameKey(name),
   );
-  const printing = roster?.printings?.[0];
+  const card = data.cards.find(
+    (c) => cardNameKey(c.name) === cardNameKey(name),
+  );
+  const printing =
+    roster?.printings?.[0] ??
+    (card && data.deckCards.find((c) => c.card_id === card.id)?.printings?.[0]);
   return printing?.image_url?.replace("/high.webp", "/low.webp");
 }
 function ReplayImage({
@@ -31,11 +36,13 @@ function ReplayImage({
   src,
   back = "classic",
   hidden = false,
+  onInspect,
 }: {
   name?: string;
   src?: string;
   back?: string;
   hidden?: boolean;
+  onInspect?: (name: string) => void;
 }) {
   const [failed, setFailed] = useState(false);
   if (hidden || !name)
@@ -52,11 +59,28 @@ function ReplayImage({
       className="replay-card-image"
       src={src}
       alt={name}
+      role={onInspect ? "button" : undefined}
+      tabIndex={onInspect ? 0 : undefined}
+      onClick={() => onInspect?.(name)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onInspect?.(name);
+        }
+      }}
       onError={() => setFailed(true)}
       draggable={false}
     />
   ) : (
-    <div className="replay-image-placeholder">
+    <div
+      className="replay-image-placeholder"
+      role={onInspect ? "button" : undefined}
+      tabIndex={onInspect ? 0 : undefined}
+      onClick={() => onInspect?.(name)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") onInspect?.(name);
+      }}
+    >
       {name}
       <small>Image unavailable</small>
     </div>
@@ -108,6 +132,12 @@ export function CombatLogView({
       return null;
     }
   }, [match.combat_log]);
+  const [inspected, setInspected] = useState<string | null>(null);
+  const [discardPlayer, setDiscardPlayer] = useState<string | null>(null);
+  function inspect(name: string) {
+    setPlaying(false);
+    setInspected(name);
+  }
   const [view, setView] = useState<"timeline" | "replay">("timeline");
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -162,6 +192,7 @@ export function CombatLogView({
       >
         <ReplayImage
           key={card.name}
+          onInspect={inspect}
           name={card.name}
           src={image(card.name)}
           back={back}
@@ -176,6 +207,12 @@ export function CombatLogView({
               key={i}
               className={`energy-token energy-${energySymbol(name).toLowerCase()}`}
               title={name}
+              role="button"
+              tabIndex={0}
+              onClick={() => inspect(name)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") inspect(name);
+              }}
             >
               {energySymbol(name).slice(0, 1)}
             </span>
@@ -184,7 +221,7 @@ export function CombatLogView({
         <div className="replay-tools">
           {card.tools.map((name, i) => (
             <div key={i} title={name}>
-              <ReplayImage name={name} src={image(name)} />
+              <ReplayImage name={name} src={image(name)} onInspect={inspect} />
             </div>
           ))}
         </div>
@@ -216,6 +253,7 @@ export function CombatLogView({
               <ReplayImage
                 name={name ?? undefined}
                 src={!isOpponent && name ? image(name) : undefined}
+                onInspect={inspect}
                 hidden={isOpponent || !name}
                 back={back}
               />
@@ -247,7 +285,13 @@ export function CombatLogView({
             <ReplayImage back={back} />
             <strong>{state.deck}</strong>
           </div>
-          <div
+          <button
+            type="button"
+            aria-label={`View ${player} discard pile`}
+            onClick={() => {
+              setPlaying(false);
+              setDiscardPlayer(player);
+            }}
             className="replay-discard-pile"
             title={state.discard.slice(-5).join(", ")}
           >
@@ -259,7 +303,7 @@ export function CombatLogView({
               back={back}
             />
             <strong>{state.discard.length}</strong>
-          </div>
+          </button>
         </div>
       </section>
     );
@@ -275,7 +319,7 @@ export function CombatLogView({
   return (
     <Modal
       wide
-      title="Combat log"
+      title={match.combat_log ? "Combat log" : "Match review"}
       description={`${match.deck_name} vs ${match.opponent_deck_name}`}
       onClose={onClose}
       closeOnBackdrop={!playing}
@@ -295,8 +339,32 @@ export function CombatLogView({
             {parsed.coin.winner ?? "unknown"}.
           </span>
         )}
-        {match.notes && <p>{match.notes}</p>}
       </div>
+      {!parsed && (
+        <div className="combat-match-summary">
+          <strong>Opening prize cards</strong>
+          <div className="prize-avatar-list">
+            {Array.from({ length: 6 }, (_, i) => {
+              const prize = data.prizes
+                .filter((p) => p.match_id === match.id)
+                .sort((a, b) => a.slot - b.slot)[i];
+              const card = data.rosters.find(
+                (r) =>
+                  r.match_id === match.id &&
+                  r.side === "mine" &&
+                  r.card_id === prize?.card_id,
+              );
+              return (
+                <PrizeAvatar
+                  key={i}
+                  name={card?.card_name ?? "Unknown prize card"}
+                  printing={card?.printings?.[0]}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="combat-view-tabs">
         <Button
           variant={view === "timeline" ? "default" : "outline"}
@@ -373,7 +441,11 @@ export function CombatLogView({
             {side(own, false)}
             {board?.stadium && (
               <div className="replay-stadium" title={board.stadium}>
-                <ReplayImage name={board.stadium} src={image(board.stadium)} />
+                <ReplayImage
+                  name={board.stadium}
+                  src={image(board.stadium)}
+                  onInspect={inspect}
+                />
                 <small>{board.stadium}</small>
               </div>
             )}
@@ -383,7 +455,11 @@ export function CombatLogView({
                 key={board.played + event?.turn}
                 ref={animateFromBoardCenter}
               >
-                <ReplayImage name={board.played} src={image(board.played)} />
+                <ReplayImage
+                  name={board.played}
+                  src={image(board.played)}
+                  onInspect={inspect}
+                />
                 <small>{board.played}</small>
               </div>
             )}
@@ -420,9 +496,10 @@ export function CombatLogView({
                       <button
                         key={slot}
                         disabled={
-                          wasTaken ||
-                          order >= 0 ||
-                          picked.length >= (event.count ?? 1)
+                          !(name && event.actor === own) &&
+                          (wasTaken ||
+                            order >= 0 ||
+                            picked.length >= (event.count ?? 1))
                         }
                         className={
                           wasTaken
@@ -432,6 +509,14 @@ export function CombatLogView({
                               : ""
                         }
                         onClick={() => {
+                          if (
+                            (wasTaken || order >= 0) &&
+                            name &&
+                            event.actor === own
+                          ) {
+                            inspect(name);
+                            return;
+                          }
                           setPlaying(false);
                           setReveals((r) => ({
                             ...r,
@@ -536,6 +621,35 @@ export function CombatLogView({
           </p>
         </>
       )}
+      {discardPlayer && (
+        <Modal
+          title={`${discardPlayer} discard pile`}
+          onClose={() => setDiscardPlayer(null)}
+        >
+          <div className="discard-card-grid">
+            {board?.sides[discardPlayer]?.discard.map((name, i) => (
+              <div key={i}>
+                <ReplayImage
+                  name={name}
+                  src={image(name)}
+                  onInspect={inspect}
+                />
+                <small>{name}</small>
+              </div>
+            ))}
+          </div>
+          {!board?.sides[discardPlayer]?.discard.length && (
+            <p>No discarded cards at this action.</p>
+          )}
+        </Modal>
+      )}
+      {inspected && (
+        <CardInspection
+          name={inspected}
+          src={image(inspected)}
+          onClose={() => setInspected(null)}
+        />
+      )}
     </Modal>
   );
 }
@@ -548,17 +662,54 @@ export function PrizeAvatar({
   printing?: CardPrinting;
 }) {
   const [failed, setFailed] = useState(false);
+  const [open, setOpen] = useState(false);
   return (
-    <span className="prize-avatar" title={name} aria-label={name}>
-      {printing?.image_url && !failed ? (
-        <img
-          alt={name}
-          src={printing.image_url.replace("/high.webp", "/low.webp")}
-          onError={() => setFailed(true)}
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="prize-avatar"
+        title={name}
+        aria-label={name}
+      >
+        {printing?.image_url && !failed ? (
+          <img
+            alt={name}
+            src={printing.image_url.replace("/high.webp", "/low.webp")}
+            onError={() => setFailed(true)}
+          />
+        ) : (
+          <span>?</span>
+        )}
+      </button>
+      {open && (
+        <CardInspection
+          name={name}
+          src={printing?.image_url}
+          onClose={() => setOpen(false)}
         />
-      ) : (
-        <span>?</span>
       )}
-    </span>
+    </>
+  );
+}
+
+function CardInspection({
+  name,
+  src,
+  onClose,
+}: {
+  name: string;
+  src?: string;
+  onClose: () => void;
+}) {
+  return (
+    <Modal title={name} onClose={onClose}>
+      <div className="card-inspection">
+        <ReplayImage
+          name={name}
+          src={src?.replace("/low.webp", "/high.webp")}
+        />
+      </div>
+    </Modal>
   );
 }

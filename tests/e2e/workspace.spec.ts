@@ -192,7 +192,7 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
     .click();
   await page.getByRole("button", { name: "Add manually", exact: true }).click();
   await page.mouse.click(10, 10);
-  await expect(page.getByRole("dialog", {name:"Add a match"})).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Add a match" })).toBeVisible();
   await expect(
     page.getByRole("combobox", { name: "Your deck", exact: true }),
   ).toContainText("Deck Alpha");
@@ -229,10 +229,12 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await page.locator(".combo-search").getByRole("searchbox").press("Escape");
   for (let i = 3; i <= 6; i++) await choose(page, `Prize ${i}`, "Test Item");
   await page.getByRole("button", { name: "Save match", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Match saved!" })
+    .getByRole("button", { name: "Close dialog" })
+    .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("status").first()).toContainText(
-    "Match saved to your statistics.",
-  );
+
   await expect(first).toHaveAttribute(
     "aria-label",
     /^Test Basic copy 1: Prizes/,
@@ -735,49 +737,42 @@ test("combat log inference, perspective correction, full-screen save and board r
     .getByRole("button", { name: "Add Match" })
     .click();
   const dialog = page.getByRole("dialog", { name: "Add a match" });
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.evaluate(
+    (raw) => navigator.clipboard.writeText(raw),
+    readFileSync("tests/fixtures/combat-log.txt", "utf8"),
+  );
+  await expect(
+    dialog.getByRole("combobox", { name: "Result", exact: true }),
+  ).toHaveCount(0);
   await dialog
-    .getByLabel("Combat log", { exact: true })
-    .fill(readFileSync("tests/fixtures/combat-log.txt", "utf8"));
+    .getByLabel("Opponent deck name", { exact: true })
+    .fill("Opponent Hydrapple");
+  await dialog.getByRole("button", { name: "Import combat log" }).click();
   await expect(
     dialog.getByRole("combobox", { name: "Your player", exact: true }),
   ).toContainText("Ciberbrian");
-  await expect(
-    dialog.getByRole("combobox", { name: "Result", exact: true }),
-  ).toContainText("Win");
+  await expect(dialog.locator(".import-match-summary")).toContainText("WIN");
   await choose(page, "Your player", "bastorz");
-  await expect(
-    dialog.getByRole("combobox", { name: "Result", exact: true }),
-  ).toContainText("Loss");
-  await expect(
-    dialog.getByRole("combobox", { name: "Your prizes taken", exact: true }),
-  ).toContainText("2");
-  await expect(
-    dialog.getByRole("combobox", {
-      name: "Opponent prizes taken",
-      exact: true,
-    }),
-  ).toContainText("6");
-  await expect(
-    dialog.getByRole("combobox", { name: /^Your starter/ }),
-  ).toContainText("Fezandipiti ex");
-  await expect(
-    dialog.getByRole("combobox", { name: /^Opponent starter/ }),
-  ).toContainText("Applin");
-  await expect(
-    dialog.getByRole("combobox", { name: "Prize 1", exact: true }),
-  ).toContainText("Unknown prize card");
+  await expect(dialog.locator(".import-match-summary")).toContainText("LOSS");
+  await expect(dialog.locator(".import-match-summary")).toContainText(
+    "2" + String.fromCharCode(8211) + "6 prizes taken",
+  );
+  await expect(dialog.locator(".import-match-summary")).toContainText(
+    "Starter: Fezandipiti ex",
+  );
+  await expect(dialog.locator(".import-match-summary")).toContainText(
+    "Starter: Applin",
+  );
+  await expect(dialog.locator("summary").first()).toContainText("6 unknown");
   await dialog.getByRole("button", { name: "Save match", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.locator(".notebook-workspace")).toHaveClass(
     /notebook-game-mode/,
   );
   await page
-    .getByRole("region", { name: "Prize cards" })
-    .getByRole("button", { name: "Play again" })
-    .click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Reset game", exact: true })
+    .getByRole("dialog", { name: "Match saved!" })
+    .getByRole("button", { name: "Play again", exact: true })
     .click();
   await expect(page.locator(".notebook-workspace")).toHaveClass(
     /notebook-game-mode/,
@@ -802,6 +797,27 @@ test("combat log inference, perspective correction, full-screen save and board r
   await page.getByRole("button", { name: "Next action" }).click();
   await page.getByRole("button", { name: "Previous action" }).click();
   await page.getByLabel("Replay speed").selectOption("2");
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page
+    .getByRole("button", { name: "View Ciberbrian discard pile" })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Ciberbrian discard pile" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Play", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("dialog", { name: "Ciberbrian discard pile" })
+    .getByRole("button", { name: "Close dialog" })
+    .click();
+  await page.locator(".replay-pokemon img[role=button]").first().click();
+  await expect(page.locator(".card-inspection")).toBeVisible();
+  await page
+    .getByRole("dialog")
+    .last()
+    .getByRole("button", { name: "Close dialog" })
+    .click();
   await page.screenshot({ path: "test-results/combat-replay.png" });
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
 });

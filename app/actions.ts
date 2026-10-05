@@ -197,6 +197,7 @@ export async function saveMatch(input: MatchInput): Promise<ActionResult> {
   )
     return { success: false, error: "Choose a valid card back." };
   let coinWon: boolean | null = null;
+  let opponentStarterName = "";
   if (input?.combat_log) {
     try {
       const parsed = parseCombatLog(input.combat_log);
@@ -208,6 +209,9 @@ export async function saveMatch(input: MatchInput): Promise<ActionResult> {
       coinWon = parsed.coin?.winner
         ? parsed.coin.winner === input.log_player
         : null;
+      opponentStarterName =
+        parsed.starters[parsed.players.find((p) => p !== input.log_player)!] ??
+        "";
     } catch (error) {
       return {
         success: false,
@@ -218,12 +222,10 @@ export async function saveMatch(input: MatchInput): Promise<ActionResult> {
   if (
     !input ||
     (input.id && !id(input.id)) ||
-    ![
-      input.deck_id,
-      input.opponent_deck_id,
-      input.starter_id,
-      input.opponent_starter_id,
-    ].every(id) ||
+    ![input.deck_id, input.starter_id].every(id) ||
+    (input.opponent_deck_id === null
+      ? !input.combat_log || !name(input.opponent_deck_name)
+      : ![input.opponent_deck_id, input.opponent_starter_id].every(id)) ||
     !["win", "loss", "draw"].includes(input.result) ||
     ![input.my_prizes, input.opponent_prizes].every(
       (n) => Number.isInteger(n) && n >= 0 && n <= 6,
@@ -246,18 +248,22 @@ export async function saveMatch(input: MatchInput): Promise<ActionResult> {
     if (input.combat_log !== undefined) {
       const { error } = await client
         .from("matches")
-        .select("combat_log")
+        .select("combat_log,opponent_starter_name")
         .limit(0);
       if (error?.code === "42703")
         return {
           success: false,
           error:
-            "Install 20261005_combat_logs.sql in Supabase before saving combat logs.",
+            "Install 20261005_named_opponents.sql after 20261005_combat_logs.sql in Supabase.",
         };
       if (error) throw error;
     }
     const { data, error } = await client.rpc("save_match", {
-      payload: { ...input, coin_won: coinWon },
+      payload: {
+        ...input,
+        coin_won: coinWon,
+        opponent_starter_name: opponentStarterName,
+      },
     });
     if (error) throw error;
     refresh();

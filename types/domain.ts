@@ -115,6 +115,7 @@ export interface Variant {
 }
 export type Result = "win" | "loss" | "draw";
 export interface Match {
+  opponent_starter_name?: string;
   combat_log?: string;
   log_player?: string;
   coin_won?: boolean | null;
@@ -122,14 +123,14 @@ export interface Match {
   opponent_card_back?: string;
   id: string;
   deck_id: string;
-  opponent_deck_id: string;
+  opponent_deck_id: string | null;
   deck_name: string;
   opponent_deck_name: string;
   result: Result;
   my_prizes: number;
   opponent_prizes: number;
   starter_id: string;
-  opponent_starter_id: string;
+  opponent_starter_id: string | null;
   played_at: string;
   notes: string;
   created_at: string;
@@ -169,18 +170,19 @@ export interface DeckInput {
   new_cards?: { id: string; name: string; type: CardType }[];
 }
 export interface MatchInput {
+  opponent_deck_name?: string;
   combat_log?: string;
   log_player?: string;
   card_back?: string;
   opponent_card_back?: string;
   id?: string;
   deck_id: string;
-  opponent_deck_id: string;
+  opponent_deck_id: string | null;
   result: Result;
   my_prizes: number;
   opponent_prizes: number;
   starter_id: string;
-  opponent_starter_id: string;
+  opponent_starter_id: string | null;
   played_at: string;
   notes: string;
   prizes: string[];

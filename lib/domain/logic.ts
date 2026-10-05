@@ -71,12 +71,7 @@ export function summarize(matches: Match[]) {
       b.id.localeCompare(a.id),
   );
   const groups = new Map<string, Match[]>();
-  sorted.forEach((m) =>
-    groups.set(m.opponent_deck_id, [
-      ...(groups.get(m.opponent_deck_id) ?? []),
-      m,
-    ]),
-  );
+  sorted.forEach((m) => { const key = m.opponent_deck_id ?? `name:${m.opponent_deck_name.trim().toLowerCase()}`; groups.set(key, [...(groups.get(key) ?? []), m]); });
   const matchups = [...groups].map(([id, games]) => ({
     id,
     name: games[0].opponent_deck_name,

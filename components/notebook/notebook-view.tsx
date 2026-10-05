@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { RegexCombobox } from "@/components/shared/regex-combobox";
 import { ConfirmDialog } from "@/components/shared/modal";
 import { PageHeader, EmptyState } from "@/components/shared/page-parts";
+import { MatchSaved } from "@/components/stats/match-saved";
 import { MatchForm } from "@/components/stats/match-form";
 import { TrackerSearch } from "./tracker-search";
 import { cardGroup, sortedRoster } from "@/components/decks/deck-mosaic";
@@ -35,7 +36,8 @@ export function NotebookView({ data }: { data: AppData }) {
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const escape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setGameMode(false);
+      if (e.key === "Escape" && !document.querySelector("dialog[open]"))
+        setGameMode(false);
     };
     window.addEventListener("keydown", escape);
     return () => {
@@ -46,6 +48,7 @@ export function NotebookView({ data }: { data: AppData }) {
   const params = useSearchParams();
   const [deckId, setDeckId] = useState(params.get("deck") ?? "");
   const [copies, setCopies] = useState<Record<string, State>>({});
+  const [savedId, setSavedId] = useState<string | null>(null);
   const [reset, setReset] = useState(false);
   const [result, setResult] = useState<Result | "">("");
   const [matchForm, setMatchForm] = useState<{
@@ -479,7 +482,25 @@ export function NotebookView({ data }: { data: AppData }) {
           data={data}
           initialValues={matchForm}
           onClose={() => setMatchForm(null)}
-          onSaved={() => setMatchMessage("Match saved to your statistics.")}
+          onSaved={setSavedId}
+        />
+      )}
+      {savedId && (
+        <MatchSaved
+          data={data}
+          id={savedId}
+          onClose={() => setSavedId(null)}
+          onPlayAgain={() => {
+            setCopies((cs) =>
+              Object.fromEntries(
+                Object.entries(cs).filter(([k]) => !k.startsWith(`${deckId}:`)),
+              ),
+            );
+            setResult("");
+            setMatchError("");
+            setMatchMessage("");
+            setSavedId(null);
+          }}
         />
       )}
       {reset && (

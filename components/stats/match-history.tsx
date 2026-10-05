@@ -29,12 +29,18 @@ export function MatchHistory({
   const maxPage = Math.max(0, Math.ceil(matches.length / count) - 1);
   const current = Math.min(page, maxPage);
   const displayed = matches.slice(current * count, (current + 1) * count);
-  function cardName(match: Match, cardId: string, side: "mine" | "opponent") {
+  function cardName(
+    match: Match,
+    cardId: string | null,
+    side: "mine" | "opponent",
+  ) {
     return (
       data.rosters.find(
         (r) =>
           r.match_id === match.id && r.card_id === cardId && r.side === side,
-      )?.card_name ?? "Unavailable card"
+      )?.card_name ??
+      (side === "opponent" ? match.opponent_starter_name : undefined) ??
+      "Unavailable card"
     );
   }
   return (
@@ -74,7 +80,6 @@ export function MatchHistory({
               <th>Prizes taken</th>
               <th>Starters</th>
               <th>Opening prize cards</th>
-              <th>Notes</th>
               <th className="history-actions">Actions</th>
             </tr>
           </thead>
@@ -141,7 +146,6 @@ export function MatchHistory({
                       })}
                     </div>
                   </td>
-                  <td className="match-notes">{m.notes || "—"}</td>
                   <td className="history-actions">
                     <div className="flex flex-col gap-1">
                       {m.combat_log && (

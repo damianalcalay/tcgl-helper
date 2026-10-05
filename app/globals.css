@@ -2603,3 +2603,57 @@
     transform: none;
   }
 }
+
+.card-inspection {
+  width: min(100%, 340px);
+  margin: 0 auto;
+}
+.card-inspection .replay-card-image {
+  width: 100%;
+  height: auto;
+  max-height: 65vh;
+  object-fit: contain;
+}
+.discard-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 12px;
+}
+.discard-card-grid .replay-card-image {
+  width: 100%;
+  height: auto;
+  cursor: pointer;
+}
+.discard-card-grid small {
+  display: block;
+  text-align: center;
+}
+.replay-card-image[role="button"],
+.energy-token[role="button"] {
+  cursor: zoom-in;
+}
+.import-match-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: hsl(var(--muted));
+}
+.import-match-summary > strong {
+  grid-column: 1/-1;
+}
+.import-player-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.import-player-summary > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.opponent-title input {
+  border: 2px solid hsl(var(--primary));
+}

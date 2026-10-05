@@ -68,6 +68,13 @@ for (const migrated of [false, true])
       await db.exec(
         fs.readFileSync("supabase/migrations/20261005_combat_logs.sql", "utf8"),
       );
+    if (migrated)
+      await db.exec(
+        fs.readFileSync(
+          "supabase/migrations/20261005_named_opponents.sql",
+          "utf8",
+        ),
+      );
     await db.query(`select set_config('request.jwt.claim.sub',$1,false)`, [
       USER,
     ]);
@@ -335,6 +342,42 @@ for (const migrated of [false, true])
       notes: "Test",
       prizes: [basic, basic, item, item, item, item],
     };
+    await t.test(
+      "combat imports accept a named opponent without a saved deck",
+      async () => {
+        const payload = {
+          ...input,
+          opponent_deck_id: null,
+          opponent_starter_id: null,
+          opponent_deck_name: "Named opponent",
+          opponent_starter_name: "Fezandipiti ex",
+          combat_log: fs.readFileSync("tests/fixtures/combat-log.txt", "utf8"),
+        };
+        const matchId = await rpc("save_match", payload);
+        const saved = (
+          await db.query(
+            "select opponent_deck_id, opponent_starter_id, opponent_deck_name, opponent_starter_name from public.matches where id=$1",
+            [matchId],
+          )
+        ).rows[0];
+        assert.equal(saved.opponent_deck_id, null);
+        assert.equal(saved.opponent_starter_id, null);
+        assert.equal(saved.opponent_deck_name, "Named opponent");
+        assert.equal(saved.opponent_starter_name, "Fezandipiti ex");
+        await assert.rejects(
+          rpc("save_match", { ...payload, opponent_deck_name: "" }),
+          /opponent/i,
+        );
+        await assert.rejects(
+          rpc("save_match", { ...payload, combat_log: "" }),
+          /opponent/i,
+        );
+        await db.query("select public.delete_entity($1,$2)", [
+          "match",
+          matchId,
+        ]);
+      },
+    );
     let mid;
     await t.test("starters, prize membership and per-copy limits", async () => {
       await assert.rejects(

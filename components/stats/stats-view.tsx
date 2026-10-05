@@ -17,9 +17,11 @@ import { ConfirmDialog } from "@/components/shared/modal";
 import { RegexCombobox } from "@/components/shared/regex-combobox";
 import { PageHeader, Metric, EmptyState } from "@/components/shared/page-parts";
 import { useMutation } from "@/components/shared/use-mutation";
+import { MatchSaved } from "./match-saved";
 import { MatchForm } from "./match-form";
 import { MatchHistory } from "./match-history";
 export function StatsView({ data }: { data: AppData }) {
+  const [savedId, setSavedId] = useState<string | null>(null);
   const [deckFilter, setDeckFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<Match | null | undefined>();
@@ -232,7 +234,19 @@ export function StatsView({ data }: { data: AppData }) {
         <MatchForm
           data={data}
           match={form ?? undefined}
+          onSaved={setSavedId}
           onClose={() => setForm(undefined)}
+        />
+      )}
+      {savedId && (
+        <MatchSaved
+          data={data}
+          id={savedId}
+          onClose={() => setSavedId(null)}
+          onPlayAgain={() => {
+            setSavedId(null);
+            setForm(null);
+          }}
         />
       )}
       {deleting && (
