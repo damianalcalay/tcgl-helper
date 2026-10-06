@@ -21,7 +21,7 @@ function load(file, fetch) {
       Object,
       Number,
       require: (name) =>
-        name === "@/types/domain" ? load("types/domain.ts") : require(name),
+        name === "@/types/domain" ? load("types/domain.ts") : name === "@/lib/domain/combat-log" ? load("lib/domain/combat-log.ts") : require(name),
     },
   );
   return exports;

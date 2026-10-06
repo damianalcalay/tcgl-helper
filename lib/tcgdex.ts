@@ -6,6 +6,7 @@ import {
   type CardType,
 } from "@/types/domain";
 import type { ImportedCard } from "@/lib/domain/deck-import";
+import { cardNameKey } from "@/lib/domain/combat-log";
 
 const API = "https://api.tcgdex.net/v2/en";
 // TCG Live abbreviations differ from TCGdex set IDs.
@@ -188,4 +189,43 @@ export async function enrichDeck(cards: ImportedCard[]) {
     );
   }
   return { cards: result, warnings };
+}
+
+/** Representative art for log names; logs do not identify a printing. */
+export async function resolveLogCard(name: string) {
+  const wanted = cardNameKey(name);
+  const search = wanted
+    .replace(/^basic /, " ")
+    .replace(/ (ex|gx|v|vmax|vstar)$/, " ")
+    .trim();
+  const candidates = await get<{ id: string; name: string; image?: string }[]>(
+    `cards?name=${encodeURIComponent(search)}`,
+  );
+  const normalized = (value: string) =>
+    cardNameKey(value).replace(/^basic /, "");
+  const exact = candidates
+    .filter(
+      (c) =>
+        normalized(c.name) === normalized(name) ||
+        normalized(c.name) === normalized(search),
+    )
+    .reverse()
+    .slice(0, 8);
+  for (const brief of exact) {
+    const card = await get<CardData>(`cards/${encodeURIComponent(brief.id)}`);
+    const full =
+      card.suffix && !card.name.endsWith(` ${card.suffix}`)
+        ? `${card.name} ${card.suffix}`
+        : card.name;
+    if (normalized(full) !== normalized(wanted)) continue;
+    const type = cardType(card);
+    return {
+      name,
+      type,
+      image: card.image?.startsWith("https://assets.tcgdex.net/en/")
+        ? `${card.image}/high.webp`
+        : undefined,
+    };
+  }
+  return { name };
 }

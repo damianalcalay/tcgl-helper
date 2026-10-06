@@ -21,7 +21,16 @@ export async function updateSession(request: NextRequest) {
     },
   );
   const { data } = await client.auth.getClaims();
-  if (!data?.claims && !request.nextUrl.pathname.startsWith("/auth")) {
+  const publicRoute =
+    request.nextUrl.pathname === "/pro-tv" ||
+    ["/api/replay-image", "/api/replay-cards"].includes(
+      request.nextUrl.pathname,
+    );
+  if (
+    !data?.claims &&
+    !request.nextUrl.pathname.startsWith("/auth") &&
+    !publicRoute
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     url.search = "";

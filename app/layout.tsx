@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
 import { AppShell } from "@/components/app-shell";
 import "./globals.css";
+import "./replay.css";
 export const metadata: Metadata = {
   title: "TCG Helper",
   description:

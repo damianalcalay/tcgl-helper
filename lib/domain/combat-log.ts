@@ -35,6 +35,7 @@ export interface CombatEvent {
   cards?: string[];
   damage?: number;
   action?: string;
+  source?: "hand" | "discard";
 }
 export interface ParsedCombatLog {
   players: string[];
@@ -114,7 +115,8 @@ export function parseCombatLog(raw: string): ParsedCombatLog {
         last.details.push(original.trim());
         if (
           text.startsWith("•") &&
-          !/(?:Base damage:|attached Energy:|Total damage:)/.test(text)
+          !/(?:damage|Weakness|Resistance|\(Item\)|\(Ability\))/i.test(text) &&
+          ["draw", "discard", "shuffle"].includes(last.kind)
         )
           last.cards = text.slice(1).trim().split(/,\s*/);
       }
@@ -187,6 +189,16 @@ export function parseCombatLog(raw: string): ParsedCombatLog {
       event.card = m[1];
       event.target = m[2];
       event.zone = /on the Bench/.test(rest) ? "bench" : "active";
+      // Aura Jab attaches from discard; the exported sub-action omits its source.
+      const precedingAction = [...parsed.events]
+        .reverse()
+        .find((e) => !e.text.startsWith("-"));
+      event.source =
+        original.trim().startsWith("-") &&
+        precedingAction?.kind === "attack" &&
+        precedingAction.action === "Aura Jab"
+          ? "discard"
+          : "hand";
     } else if (
       (m = rest.match(
         /^evolved (.+) to (.+) (?:in the Active Spot|on the Bench)\.$/,
@@ -204,7 +216,7 @@ export function parseCombatLog(raw: string): ParsedCombatLog {
       event.card = m[1];
     } else if (
       (m = rest.match(
-        /^'s (.+?) used (.+?)(?: on (.+)'s (.+) for (\d+) damage)?\.$/,
+        /^'s (.+?) used (.+?)(?: on (.+)'s (.+) for (\d+) damage)?\.(?: .*damage\.)?$/,
       ))
     ) {
       event.kind = m[3] ? "attack" : "use";
@@ -250,6 +262,10 @@ export function parseCombatLog(raw: string): ParsedCombatLog {
     } else if ((m = rest.match(/^discarded (\d+) cards?\.$/))) {
       event.kind = "discard";
       event.count = Number(m[1]);
+    } else if ((m = rest.match(/^discarded (.+)\.$/))) {
+      event.kind = "discard";
+      event.card = m[1];
+      event.count = 1;
     } else if ((m = text.match(/^(.+) was discarded from (.+)'s (.+)\.$/))) {
       event.kind = "discard";
       event.actor = m[2];
@@ -303,4 +319,108 @@ export function parseCombatLog(raw: string): ParsedCombatLog {
       "Prize reveals do not identify a unique perspective. Choose Your player.",
     );
   return parsed;
+}
+
+export type PairResult =
+  | { status: "matched"; log: ParsedCombatLog }
+  | { status: "incompatible" | "unverifiable"; message: string };
+
+/** Compare observable histories, allowing anonymous private information. */
+export function combineCombatLogs(first: string, second: string): PairResult {
+  let a: ParsedCombatLog, b: ParsedCombatLog;
+  try {
+    a = parseCombatLog(first);
+    b = parseCombatLog(second);
+  } catch {
+    return {
+      status: "unverifiable",
+      message:
+        "Paste both complete English combat logs, including Setup and the result.",
+    };
+  }
+  const fail = (message: string): PairResult => ({
+    status: "incompatible",
+    message: `This log does not complement the first match. ${message}`,
+  });
+  if ([...a.players].sort().join("\0") !== [...b.players].sort().join("\0"))
+    return fail("The players differ.");
+  if (!a.winner || !b.winner)
+    return {
+      status: "unverifiable",
+      message:
+        "The complete result is required to verify the complementary history.",
+    };
+  if (
+    a.winner !== b.winner ||
+    JSON.stringify(a.coin) !== JSON.stringify(b.coin)
+  )
+    return fail("The opening or result differs.");
+  if (a.events.length !== b.events.length)
+    return fail("The action sequences have different lengths.");
+  const known = (s: string | undefined) => s && !/^Unknown|^A card$/i.test(s);
+  const equal = (x: string, y: string) => cardNameKey(x) === cardNameKey(y);
+  const events: CombatEvent[] = [];
+  for (let i = 0; i < a.events.length; i++) {
+    const x = a.events[i],
+      y = b.events[i];
+    for (const key of [
+      "kind",
+      "actor",
+      "turn",
+      "turnPlayer",
+      "zone",
+      "count",
+      "damage",
+      "targetPlayer",
+      "target",
+      "action",
+      "source",
+    ] as const)
+      if (x[key] !== y[key]) return fail(`Action ${i + 1} differs (${key}).`);
+    if (known(x.card) && known(y.card) && !equal(x.card!, y.card!))
+      return fail(`Action ${i + 1} has different cards.`);
+    const count = Math.max(x.cards?.length ?? 0, y.cards?.length ?? 0);
+    const cards: string[] = [];
+    for (let j = 0; j < count; j++) {
+      const left = x.cards?.[j],
+        right = y.cards?.[j];
+      if (known(left) && known(right) && !equal(left!, right!))
+        return fail(`Action ${i + 1} reveals conflicting cards.`);
+      cards.push(known(left) ? left! : (right ?? left ?? "Unknown card"));
+    }
+    if (
+      x.kind === "other" &&
+      i !== a.events.length - 1 &&
+      !equal(x.text, y.text)
+    )
+      return fail(`Action ${i + 1} contains different unrecognized effects.`);
+    const richer =
+      (y.cards?.filter(known).length ?? 0) >
+        (x.cards?.filter(known).length ?? 0) ||
+      (!x.card && y.card)
+        ? y
+        : x;
+    events.push({ ...richer, index: i, cards: count ? cards : undefined });
+  }
+  const perspectives = [a, b].map((log) => {
+    const opening = log.events.filter(
+      (e) => e.kind === "draw" && e.turn === 0 && e.cards?.length,
+    );
+    return opening.length === 1 ? opening[0].actor : log.perspective;
+  });
+  if (perspectives[0] && perspectives[0] === perspectives[1])
+    return fail("Both logs show the same player's perspective.");
+  if (!perspectives[0] || !perspectives[1])
+    return {
+      status: "unverifiable",
+      message:
+        "The private information does not identify two complementary perspectives.",
+    };
+  const prizeCards = Object.fromEntries(
+    a.players.map((p) => [
+      p,
+      a.prizeCards[p].map((c, i) => c ?? b.prizeCards[p][i] ?? null),
+    ]),
+  );
+  return { status: "matched", log: { ...a, events, prizeCards } };
 }

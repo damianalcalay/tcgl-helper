@@ -20,13 +20,13 @@ export default defineConfig({
     {
       command: "node tests/supabase-fixture.cjs",
       url: "http://localhost:54329/health",
-      reuseExistingServer: false,
+      reuseExistingServer: process.env.TCGL_E2E_REUSE_SERVERS === "1",
       env: { TCGL_TEST_FIXTURE: "1" },
     },
     {
       command: "npm run dev -- --port 3100",
       url: "http://localhost:3100/auth/login",
-      reuseExistingServer: false,
+      reuseExistingServer: process.env.TCGL_E2E_REUSE_SERVERS === "1",
       timeout: 120000,
       env: {
         NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54329",

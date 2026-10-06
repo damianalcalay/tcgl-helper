@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { CARD_TYPES, CardType, DeckInput, MatchInput } from "@/types/domain";
 import { validateQuantities } from "@/lib/domain/logic";
 import { validPrintings } from "@/lib/domain/deck-import";
-import { parseCombatLog } from "@/lib/domain/combat-log";
+import { combineCombatLogs, parseCombatLog } from "@/lib/domain/combat-log";
 export type ActionResult =
   { success: true; id?: string } | { success: false; error: string };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -268,6 +268,33 @@ export async function saveMatch(input: MatchInput): Promise<ActionResult> {
     if (error) throw error;
     refresh();
     return { success: true, id: data };
+  } catch (error) {
+    return fail(error);
+  }
+}
+export async function saveComplementaryLog(
+  matchId: string,
+  raw: string,
+): Promise<ActionResult> {
+  if (!id(matchId) || typeof raw !== "string" || raw.length > 200000)
+    return { success: false, error: "Invalid complementary log." };
+  try {
+    const client = await authenticated();
+    const { data: match, error } = await client
+      .from("matches")
+      .select("combat_log")
+      .eq("id", matchId)
+      .single();
+    if (error) throw error;
+    const pair = combineCombatLogs(match.combat_log, raw);
+    if (pair.status !== "matched")
+      return { success: false, error: pair.message };
+    const saved = await client.rpc("save_complementary_log", {
+      match_id: matchId, original_log: match.combat_log, complementary_log: raw,
+    });
+    if (saved.error) throw saved.error;
+    refresh();
+    return { success: true };
   } catch (error) {
     return fail(error);
   }

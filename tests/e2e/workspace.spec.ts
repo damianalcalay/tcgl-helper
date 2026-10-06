@@ -814,74 +814,88 @@ test("combat log inference, perspective correction, full-screen save and board r
     .first();
   await row.getByRole("button", { name: /Details/ }).click();
   await page.getByRole("button", { name: "View combat log" }).click();
-  await expect(page.getByRole("dialog", { name: "Combat log" })).toBeVisible();
+  const replay = page.getByRole("dialog", { name: "Match replay" });
+  await expect(replay).toBeVisible();
   await expect(
-    page.getByText("- Ciberbrian discarded 2 cards.", { exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Board replay", exact: true }).click();
-  const replay = page.getByRole("dialog", { name: "Combat log" });
-  await expect
-    .poll(() => replay.evaluate((el) => el.scrollHeight <= el.clientHeight + 1))
-    .toBe(true);
+    page.getByRole("button", { name: "Board replay", exact: true }),
+  ).toHaveCount(0);
+  await page.route("**/api/replay-cards", (route) =>
+    route.fulfill({ json: { cards: [] } }),
+  );
+  await page.route("**/api/replay-image?**", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="245" height="337"><rect width="245" height="337" fill="#abd5b9"/></svg>',
+    }),
+  );
   await page.getByLabel("Replay action", { exact: true }).fill("14");
-  await expect(page.locator(".replay-board")).toBeVisible();
-  await expect(page.locator(".replay-action-bubble")).toContainText("bastorz");
-  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(page.locator(".study-board")).toBeVisible();
+  for (const viewport of [
+    { width: 1366, height: 768 },
+    { width: 1920, height: 1080 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect
+      .poll(() =>
+        replay.evaluate((el) => el.scrollHeight <= el.clientHeight + 1),
+      )
+      .toBe(true);
+    await expect
+      .poll(() =>
+        page
+          .locator(".study-controls")
+          .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
+      )
+      .toBe(true);
+    await page.screenshot({
+      path: `test-results/replay-${viewport.width}.png`,
+    });
+  }
   await page.getByRole("button", { name: "Switch replay color theme" }).click();
   await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.screenshot({ path: "test-results/replay-dark.png" });
   await page.getByRole("button", { name: "Switch replay color theme" }).click();
   await expect(page.locator("html")).not.toHaveClass(/dark/);
-  await expect(
-    page.locator(".replay-controls").getByText("Replay speed", { exact: true }),
-  ).toHaveCount(0);
-  await expect
-    .poll(() =>
-      page.locator(".replay-action-bubble").evaluate((el) => {
-        const b = el.getBoundingClientRect();
-        const p = el.parentElement!.getBoundingClientRect();
-        return Math.abs(b.left + b.width / 2 - (p.left + p.width / 2)) < 2;
-      }),
-    )
-    .toBe(true);
-  await expect
-    .poll(() => replay.evaluate((el) => el.scrollHeight <= el.clientHeight + 1))
-    .toBe(true);
-  await expect
-    .poll(() =>
-      page
-        .locator(".replay-controls")
-        .evaluate(
-          (el) => el.getBoundingClientRect().bottom <= window.innerHeight,
-        ),
-    )
-    .toBe(true);
-  await page.screenshot({ path: "test-results/combat-replay-720.png" });
-  await page.setViewportSize({ width: 1440, height: 1000 });
-
-  await page.getByRole("button", { name: "Next action" }).click();
-  await page.getByRole("button", { name: "Previous action" }).click();
-  await selectChoice(page, "Replay speed", "x2");
-  await page.getByRole("button", { name: "Play", exact: true }).click();
   await page
     .getByRole("button", { name: "View Ciberbrian discard pile" })
     .click();
+  const pile = page.getByRole("dialog", { name: "Discard pile", exact: true });
+  await expect(pile).toBeVisible();
   await expect(
-    page.getByRole("dialog", { name: "Ciberbrian discard pile" }),
+    pile.getByRole("button", { name: "All", exact: true }),
   ).toBeVisible();
+  await pile.getByRole("button", { name: "Trainers", exact: true }).click();
+  await pile.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await page.getByRole("button", { name: "Table Top", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Play", exact: true }),
-  ).toBeVisible();
+    page.getByLabel("Replay action", { exact: true }),
+  ).toBeDisabled();
+  await page.locator(".study-active .study-card-button").first().click();
+  await page.getByLabel("Pokémon damage", { exact: true }).fill("230");
+  await expect(page.locator(".study-damage")).toContainText("230");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.locator(".study-damage")).toHaveCount(0);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(page.locator(".study-damage")).toContainText("230");
+  await page.getByRole("button", { name: "pencil", exact: true }).click();
+  const box = await page.locator(".study-board").boundingBox();
+  await page.mouse.move(box!.x + 100, box!.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + 200, box!.y + 210, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.locator(".table-annotations [data-mark]")).toHaveCount(1);
   await page
-    .getByRole("dialog", { name: "Ciberbrian discard pile" })
-    .getByRole("button", { name: "Close dialog" })
+    .getByRole("button", { name: "Save boardstate", exact: true })
     .click();
-  await page.locator(".replay-pokemon img[role=button]").first().click();
-  await expect(page.locator(".card-inspection")).toBeVisible();
+  await expect(page.getByRole("status")).toContainText(/copied|ready/);
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Table Top", exact: true }).click();
+  await expect(page.getByLabel("Replay action", { exact: true })).toBeEnabled();
+  await expect(page.locator(".study-damage")).toHaveCount(0);
+  await expect(page.locator(".table-annotations [data-mark]")).toHaveCount(0);
   await page
-    .getByRole("dialog")
-    .last()
-    .getByRole("button", { name: "Close dialog" })
+    .getByRole("button", { name: "Save boardstate", exact: true })
     .click();
-  await page.screenshot({ path: "test-results/combat-replay.png" });
-  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText(/copied|ready/);
+  await page.getByRole("button", { name: "Close replay", exact: true }).click();
 });

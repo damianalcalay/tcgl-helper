@@ -115,6 +115,7 @@ export interface Variant {
 }
 export type Result = "win" | "loss" | "draw";
 export interface Match {
+  opponent_combat_log?: string;
   opponent_starter_name?: string;
   combat_log?: string;
   log_player?: string;

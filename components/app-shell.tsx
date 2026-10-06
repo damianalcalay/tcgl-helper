@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import {
   BookOpen,
@@ -13,6 +13,7 @@ import {
   Moon,
   CircleHelp,
   LogOut,
+  Tv,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -26,6 +27,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { setTheme, resolvedTheme } = useTheme();
+  const [proTv, setProTv] = useState(false);
+  useEffect(() => {
+    if (!hasEnvVars) return;
+    const client = createClient();
+    Promise.all([
+      client.from("pro_tv_settings").select("enabled").eq("id", true).single(),
+      client.rpc("is_app_admin"),
+    ]).then(([setting, admin]) =>
+      setProTv(Boolean(setting.data?.enabled || admin.data)),
+    );
+  }, [path]);
+  const navigation = proTv
+    ? [...links, { href: "/pro-tv", name: "Pro TV", icon: Tv }]
+    : links;
   if (path.startsWith("/auth"))
     return <div className="min-h-screen bg-background">{children}</div>;
   return (
@@ -44,7 +59,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </Link>
         {!collapsed && <p className="nav-caption">YOUR WORKSPACE</p>}
         <nav aria-label="Main navigation">
-          {links.map(({ href, name, icon: Icon }) => (
+          {navigation.map(({ href, name, icon: Icon }) => (
             <Link
               key={href}
               href={href}

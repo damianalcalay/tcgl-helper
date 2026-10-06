@@ -39,6 +39,7 @@ async function setup() {
  grant usage on schema auth,storage,public to authenticated,anon;grant execute on function auth.uid() to authenticated,anon;
  insert into auth.users values('${UID}');`);
   await db.exec(fs.readFileSync("supabase/schema.sql", "utf8"));
+  await db.exec(`insert into public.app_admins values('${UID}')`);
   await db.query("select set_config('request.jwt.claim.sub',$1,false)", [UID]);
   await db.exec("set role authenticated");
 }
@@ -68,6 +69,8 @@ const tables = [
   "matches",
   "match_rosters",
   "match_prizes",
+  "pro_tv_settings",
+  "pro_tv_matches",
 ];
 const server = createServer(async (req, res) => {
   try {
@@ -98,6 +101,14 @@ const server = createServer(async (req, res) => {
         result = await db.query(`select public.${name}($1::jsonb) as value`, [
           JSON.stringify(payload.payload),
         ]);
+      else if (name === "is_app_admin")
+        result = await db.query(
+          (req.headers.authorization ?? "").includes("Zml4dHVyZS1zaWduYXR1cmU")
+            ? "select public.is_app_admin() as value"
+            : "select false as value",
+        );
+      else if (name === "save_complementary_log")
+        result = await db.query("select public.save_complementary_log($1,$2,$3) as value",[payload.match_id,payload.original_log,payload.complementary_log]);
       else if (name === "delete_entity")
         result = await db.query("select public.delete_entity($1,$2) as value", [
           payload.entity,
@@ -112,7 +123,40 @@ const server = createServer(async (req, res) => {
         return respond(res, 404, { message: "Unknown table" });
       const params = [];
       let sql;
-      if (req.method === "POST" && table === "cards") {
+      if (
+        ["POST", "PATCH", "DELETE"].includes(req.method) &&
+        table.startsWith("pro_tv_")
+      ) {
+        const payload = req.method === "DELETE" ? {} : await body(req);
+        const fields = Object.keys(payload);
+        const allowed = [
+          "title",
+          "player",
+          "opponent",
+          "deck_name",
+          "opponent_deck_name",
+          "event",
+          "round",
+          "game_number",
+          "thumbnail",
+          "combat_log",
+          "opponent_combat_log",
+          "published",
+          "enabled",
+        ];
+        if (fields.some((f) => !allowed.includes(f)))
+          throw Error("Invalid catalogue field");
+        params.push(...fields.map((f) => payload[f]));
+        if (req.method === "POST")
+          sql = `insert into public.${table}(${fields.join(",")}) values(${fields.map((_, i) => "$" + (i + 1)).join(",")}) returning *`;
+        else {
+          params.push((url.searchParams.get("id") ?? "").replace(/^eq\./, ""));
+          sql =
+            req.method === "DELETE"
+              ? `delete from public.${table} where id=$1 returning *`
+              : `update public.${table} set ${fields.map((f, i) => f + "=$" + (i + 1)).join(",")} where id=$${params.length} returning *`;
+        }
+      } else if (req.method === "POST" && table === "cards") {
         const payload = await body(req);
         sql = "insert into public.cards(name,type) values($1,$2) returning *";
         params.push(payload.name, payload.type);
@@ -123,6 +167,15 @@ const server = createServer(async (req, res) => {
           payload.name,
           payload.type,
           (url.searchParams.get("id") ?? "").replace("eq.", ""),
+        );
+      } else if (req.method === "PATCH" && table === "matches") {
+        const payload = await body(req);
+        sql =
+          "update public.matches set opponent_combat_log=$1 where id=$2 and combat_log=$3 returning *";
+        params.push(
+          payload.opponent_combat_log,
+          (url.searchParams.get("id") ?? "").replace(/^eq\./, ""),
+          (url.searchParams.get("combat_log") ?? "").replace(/^eq\./, ""),
         );
       } else {
         const rawOrder = url.searchParams.get("order") ?? "id.asc";
@@ -142,10 +195,30 @@ const server = createServer(async (req, res) => {
         const offset = Number(url.searchParams.get("offset") ?? 0);
         if (!Number.isInteger(limit) || !Number.isInteger(offset))
           throw Error("Invalid range");
-        sql = `select * from public.${table} order by ${order} limit $1 offset $2`;
+        const conditions = [];
+        for (const [field, value] of url.searchParams) {
+          if (!value.startsWith("eq.") || !/^[a-z_]+$/.test(field)) continue;
+          params.push(value.slice(3));
+          conditions.push(`${field}=$${params.length}`);
+        }
         params.push(limit, offset);
+        sql = `select * from public.${table} ${conditions.length ? "where " + conditions.join(" and ") : ""} order by ${order} limit $${params.length - 1} offset $${params.length}`;
       }
-      const result = await db.query(sql, params);
+      const result = table.startsWith("pro_tv_")
+        ? await db.transaction(async (tx) => {
+            const signed = (req.headers.authorization ?? "").includes(
+              "Zml4dHVyZS1zaWduYXR1cmU",
+            );
+            await tx.exec(
+              `set local role ${signed ? "authenticated" : "anon"}`,
+            );
+            await tx.query(
+              "select set_config('request.jwt.claim.sub',$1,true)",
+              [signed ? UID : ""],
+            );
+            return tx.query(sql, params);
+          })
+        : await db.query(sql, params);
       const single = (req.headers.accept ?? "").includes("vnd.pgrst.object");
       if (single && result.rows.length !== 1)
         return respond(res, 406, {
