@@ -11,6 +11,7 @@ export function Modal({
   busy = false,
   closeOnBackdrop = true,
   className = "",
+  bare = false,
 }: {
   title: string;
   description?: string;
@@ -20,6 +21,7 @@ export function Modal({
   busy?: boolean;
   closeOnBackdrop?: boolean;
   className?: string;
+  bare?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -30,9 +32,10 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className={`modal ${wide ? "modal-wide" : ""} ${className}`}
+      className={`modal ${wide ? "modal-wide" : ""} ${bare ? "modal-bare" : ""} ${className}`}
       onCancel={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         if (!busy) onClose();
       }}
       onClick={(e) => {
@@ -41,21 +44,23 @@ export function Modal({
       aria-label={title}
     >
       <div className="modal-inner">
-        <div className="modal-header">
-          <div>
-            <h2>{title}</h2>
-            {description && <p>{description}</p>}
+        {!bare && (
+          <div className="modal-header">
+            <div>
+              <h2>{title}</h2>
+              {description && <p>{description}</p>}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled={busy}
+              onClick={onClose}
+              aria-label="Close dialog"
+            >
+              <X />
+            </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            disabled={busy}
-            onClick={onClose}
-            aria-label="Close dialog"
-          >
-            <X />
-          </Button>
-        </div>
+        )}
         {children}
       </div>
     </dialog>

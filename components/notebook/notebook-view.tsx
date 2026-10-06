@@ -351,7 +351,9 @@ export function NotebookView({ data }: { data: AppData }) {
                               const key = `${deckId}:${c.id}:${copyNumber}`;
                               const state = copies[key] ?? 0;
                               return (
-                                <button
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
                                   key={key}
                                   className={`copy-button state-${state}`}
                                   onClick={() =>
@@ -364,7 +366,7 @@ export function NotebookView({ data }: { data: AppData }) {
                                   aria-label={`${c.name} copy ${copyNumber + 1}: ${states[state]}. Change to ${states[(state + 1) % 3]}.`}
                                 >
                                   <span>{copyNumber + 1}</span>
-                                </button>
+                                </Button>
                               );
                             })}
                           </div>
@@ -415,14 +417,15 @@ export function NotebookView({ data }: { data: AppData }) {
                     data.variants
                       .filter((v) => v.deck_id === deckId)
                       .map((v) => (
-                        <button
+                        <Button
+                          variant="ghost"
                           className="variant-chip"
                           onClick={() => choose(v.variant_id)}
                           key={v.variant_id}
                         >
                           {data.decks.find((d) => d.id === v.variant_id)?.name}
                           <ArrowUpRight size={14} />
-                        </button>
+                        </Button>
                       ))
                   ) : (
                     <p className="text-sm text-muted-foreground">

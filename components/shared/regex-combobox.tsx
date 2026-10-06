@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useId, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown, Search, X } from "lucide-react";
 export interface Option {
   value: string;
@@ -98,7 +99,8 @@ export function RegexCombobox({
       <span className="field-label" id={`${uid}-label`}>
         {label}
       </span>
-      <button
+      <Button
+        variant="ghost"
         type="button"
         className="combo-trigger"
         disabled={disabled}
@@ -122,7 +124,7 @@ export function RegexCombobox({
           {options.find((o) => o.value === value)?.label ?? placeholder}
         </span>
         <ChevronsUpDown size={15} />
-      </button>
+      </Button>
       {open && (
         <div className="combo-popover">
           <div className="combo-search">
@@ -177,7 +179,8 @@ export function RegexCombobox({
             className="combo-options"
           >
             {clearable && (
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 className="combo-option"
                 onClick={() => {
@@ -187,13 +190,14 @@ export function RegexCombobox({
               >
                 <X size={14} />
                 Clear selection
-              </button>
+              </Button>
             )}
             {loading ? (
               <p className="p-3 text-sm text-muted-foreground">Searching…</p>
             ) : filtered.length ? (
               filtered.map((o, i) => (
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
                   key={o.value}
                   id={`${uid}-option-${i}`}
@@ -209,7 +213,7 @@ export function RegexCombobox({
                     {o.description && <small>{o.description}</small>}
                   </span>
                   {value === o.value && <Check size={16} />}
-                </button>
+                </Button>
               ))
             ) : (
               !error && (

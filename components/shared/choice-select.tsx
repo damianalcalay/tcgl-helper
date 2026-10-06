@@ -42,7 +42,7 @@ export function ChoiceSelect({
           </Button>
         </Menu.Trigger>
         <Menu.Content
-          className="z-50 min-w-[160px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+          className="z-50 max-h-[min(320px,60dvh)] overflow-y-auto min-w-[160px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95"
           sideOffset={4}
         >
           <DropdownMenuRadioGroup value={value} onValueChange={onChange}>

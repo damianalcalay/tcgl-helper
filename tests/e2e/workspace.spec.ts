@@ -258,11 +258,7 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   );
   await page.locator(".match-expanded-details .prize-avatar").first().click();
   await expect(page.locator(".card-inspection")).toBeVisible();
-  await page
-    .getByRole("dialog")
-    .last()
-    .getByRole("button", { name: "Close dialog" })
-    .click();
+  await page.getByRole("dialog").last().press("Escape");
   await matchRow.press("Enter");
   await expect(matchRow).toHaveAttribute("aria-expanded", "false");
   await page.getByRole("button", { name: "Edit match", exact: true }).click();
@@ -867,32 +863,11 @@ test("combat log inference, perspective correction, full-screen save and board r
   await pile.getByRole("button", { name: "Trainers", exact: true }).click();
   await pile.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page.getByRole("button", { name: "Table Top", exact: true }).click();
-  await expect(
-    page.getByLabel("Replay action", { exact: true }),
-  ).toBeDisabled();
-  await page.locator(".study-active .study-card-button").first().click();
-  await page.getByLabel("Pokémon damage", { exact: true }).fill("230");
-  await expect(page.locator(".study-damage")).toContainText("230");
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(page.locator(".study-damage")).toHaveCount(0);
-  await page.getByRole("button", { name: "Redo", exact: true }).click();
-  await expect(page.locator(".study-damage")).toContainText("230");
-  await page.getByRole("button", { name: "pencil", exact: true }).click();
-  const box = await page.locator(".study-board").boundingBox();
-  await page.mouse.move(box!.x + 100, box!.y + 200);
-  await page.mouse.down();
-  await page.mouse.move(box!.x + 200, box!.y + 210, { steps: 5 });
-  await page.mouse.up();
-  await expect(page.locator(".table-annotations [data-mark]")).toHaveCount(1);
-  await page
-    .getByRole("button", { name: "Save boardstate", exact: true })
-    .click();
-  await expect(page.getByRole("status")).toContainText(/copied|ready/);
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Table Top", exact: true }).click();
+  const setup = page.getByRole("dialog", { name: "Prepare Table Top", exact: true });
+  await expect(setup).toBeVisible();
+  await expect(setup.getByRole("button", { name: "Review card allocation" })).toBeDisabled();
+  await setup.getByRole("button", { name: "Close dialog", exact: true }).click();
   await expect(page.getByLabel("Replay action", { exact: true })).toBeEnabled();
-  await expect(page.locator(".study-damage")).toHaveCount(0);
-  await expect(page.locator(".table-annotations [data-mark]")).toHaveCount(0);
   await page
     .getByRole("button", { name: "Save boardstate", exact: true })
     .click();

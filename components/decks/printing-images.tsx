@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import type { CardPrinting } from "@/types/domain";
 import { Modal } from "@/components/shared/modal";
 
@@ -16,7 +17,8 @@ export function PrizeThumbnail({
 }) {
   const [failed, setFailed] = useState(false);
   return (
-    <button
+    <Button
+      variant="ghost"
       type="button"
       className="prize-thumbnail"
       aria-label={`Remove ${name} copy ${copyNumber} from Prizes`}
@@ -44,7 +46,7 @@ export function PrizeThumbnail({
         Copy {copyNumber}
       </small>
       <span className="prize-remove-label">Click to remove</span>
-    </button>
+    </Button>
   );
 }
 
@@ -62,7 +64,8 @@ function PrintingImage({
   return (
     <>
       {printing.image_url && !failed ? (
-        <button
+        <Button
+          variant="ghost"
           type="button"
           className="printing-image-button"
           aria-label={`Enlarge ${name} ${printing.set_code} ${printing.collector_number}`}
@@ -74,7 +77,7 @@ function PrintingImage({
             loading="lazy"
             onError={() => setFailed(true)}
           />
-        </button>
+        </Button>
       ) : (
         <div className="printing-image-placeholder">
           {name}

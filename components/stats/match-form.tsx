@@ -567,7 +567,8 @@ export function MatchForm({
                   {sortedRoster(mine).map((c) => {
                     const used = prizes.filter((p) => p === c.id).length;
                     return (
-                      <button
+                      <Button
+                        variant="ghost"
                         type="button"
                         key={c.id}
                         aria-label={`Add prize: ${c.name}`}
@@ -594,7 +595,7 @@ export function MatchForm({
                         )}
                         <span>{c.name}</span>
                         <strong>{c.quantity - used} available</strong>
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>

@@ -14,6 +14,7 @@ import {
 import { CombatLogView } from "@/components/stats/combat-log-view";
 import { Modal } from "@/components/shared/modal";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 const empty: AppData = {
   cards: [],
   decks: [],
@@ -119,7 +120,8 @@ export function ProTvView({
       <div className="pro-tv-grid">
         {matches.map((entry) => (
           <article key={entry.id} className="pro-tv-card">
-            <button
+            <Button
+              variant="ghost"
               className="pro-tv-watch"
               onClick={() => open(entry)}
               aria-label={`Watch ${entry.title}`}
@@ -148,7 +150,7 @@ export function ProTvView({
                   {entry.deck_name} · {entry.opponent_deck_name}
                 </p>
               </div>
-            </button>
+            </Button>
             {admin && (
               <div className="pro-tv-admin">
                 <span>{entry.published ? "Published" : "Draft"}</span>
@@ -283,11 +285,11 @@ export function ProTvView({
               </label>
             ))}
             <label>
-              <input
-                type="checkbox"
+              <Checkbox
+                aria-label="Published"
                 checked={draft.published}
-                onChange={(e) =>
-                  setDraft({ ...draft, published: e.target.checked })
+                onCheckedChange={(checked) =>
+                  setDraft({ ...draft, published: checked === true })
                 }
               />{" "}
               Published

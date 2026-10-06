@@ -7,6 +7,7 @@ import {
   Deck,
   DeckInput,
   unlimitedEnergy,
+  type CardType,
 } from "@/types/domain";
 import { deckRoster, validateQuantities } from "@/lib/domain/logic";
 import {
@@ -16,6 +17,7 @@ import {
 } from "@/lib/domain/deck-import";
 import { CardTypeSelector } from "./card-type-selector";
 import { PrintingImages } from "@/components/decks/printing-images";
+import { DeckListEditor } from "./deck-list-editor";
 import { saveDeck } from "@/app/actions";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -35,6 +37,7 @@ export function DeckForm({
   onSaved: (id: string) => void;
 }) {
   const [name, setName] = useState(deck?.name ?? "");
+  const [quickList, setQuickList] = useState(false);
   const [playstyle, setPlaystyle] = useState(deck?.playstyle ?? "");
   const [notes, setNotes] = useState(deck?.notes ?? "");
   const [cards, setCards] = useState<DeckInput["cards"]>(
@@ -286,6 +289,62 @@ export function DeckForm({
       onClose={onClose}
       busy={mutation.pending || importing}
     >
+      {quickList && (
+        <Modal
+          title="Edit deck card list"
+          wide
+          onClose={() => setQuickList(false)}
+        >
+          <DeckListEditor
+            data={{
+              ...data,
+              cards: library
+                .filter((c) => c.type)
+                .map((c) => ({
+                  ...c,
+                  type: c.type as CardType,
+                  created_at: "",
+                  updated_at: "",
+                })),
+            }}
+            cards={cards.flatMap((row) => {
+              const c = library.find((c) => c.id === row.card_id);
+              return c
+                ? [
+                    {
+                      id: c.id,
+                      name: c.name,
+                      type: c.type as CardType,
+                      quantity: row.quantity,
+                      printings: row.printings,
+                    },
+                  ]
+                : [];
+            })}
+            onChange={(rows) => {
+              setDraftCards((current) => [
+                ...current.map((c) => {
+                  const edited = rows.find((a) => a.id === c.id);
+                  return edited
+                    ? { id: c.id, name: edited.name, type: edited.type }
+                    : c;
+                }),
+                ...rows
+                  .filter((c) => !library.some((a) => a.id === c.id))
+                  .map((c) => ({ id: c.id, name: c.name, type: c.type })),
+              ]);
+              setCards(
+                rows.map((c) => ({
+                  card_id: c.id,
+                  quantity: c.quantity,
+                  printings: c.printings,
+                })),
+              );
+            }}
+          />
+          <Button onClick={() => setQuickList(false)}>Done</Button>
+        </Modal>
+      )}
       <form
         className="form-stack"
         onSubmit={(e) => {
@@ -346,6 +405,13 @@ export function DeckForm({
             )}
           </details>
           <div className="add-card-row">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setQuickList(true)}
+            >
+              Edit list with Standard catalog
+            </Button>
             <RegexCombobox
               label="Card"
               placeholder="Select an existing card"
@@ -423,7 +489,8 @@ export function DeckForm({
                         />
                       )}
                       <div className="quantity-controls">
-                        <button
+                        <Button
+                          variant="ghost"
                           type="button"
                           aria-label={`Remove one ${card?.name}`}
                           onClick={() =>
@@ -439,9 +506,10 @@ export function DeckForm({
                           }
                         >
                           −
-                        </button>
+                        </Button>
                         <span>{c.quantity}</span>
-                        <button
+                        <Button
+                          variant="ghost"
                           type="button"
                           aria-label={`Add one ${card?.name}`}
                           disabled={
@@ -460,7 +528,7 @@ export function DeckForm({
                           }
                         >
                           +
-                        </button>
+                        </Button>
                       </div>
                       <Button
                         size="icon"
@@ -520,13 +588,14 @@ export function DeckForm({
             {variants.map((v) => (
               <span className="variant-chip" key={v}>
                 {data.decks.find((d) => d.id === v)?.name}
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
                   aria-label="Remove variant"
                   onClick={() => setVariants((vs) => vs.filter((x) => x !== v))}
                 >
                   <X size={13} />
-                </button>
+                </Button>
               </span>
             ))}
           </div>

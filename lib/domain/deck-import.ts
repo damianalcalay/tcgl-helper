@@ -39,6 +39,16 @@ export interface ImportedCard {
   category: "pokemon" | "trainer" | "energy";
   printings: CardPrinting[];
 }
+/** Display URLs (signed/private or shared manual art) are resolved again on load,
+ * rather than stored as expiring or untrusted URLs in a deck snapshot. */
+export function persistedPrintings(printings: CardPrinting[] | undefined) {
+  return printings?.map((p) => ({
+    ...p,
+    image_url: p.image_url?.startsWith("https://assets.tcgdex.net/en/")
+      ? p.image_url
+      : undefined,
+  }));
+}
 
 export function resizePrintings(
   printings: CardPrinting[] | undefined,
@@ -67,6 +77,8 @@ export function validPrintings(value: unknown, quantity: number): boolean {
         Number.isInteger(p.quantity) &&
         p.quantity > 0 &&
         p.quantity <= 60 &&
+        (p.tera === undefined || typeof p.tera === "boolean") &&
+        (p.tool === undefined || typeof p.tool === "boolean") &&
         typeof p.set_code === "string" &&
         /^[A-Z0-9]{2,10}$/.test(p.set_code) &&
         typeof p.collector_number === "string" &&

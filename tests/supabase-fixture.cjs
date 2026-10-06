@@ -71,6 +71,7 @@ const tables = [
   "match_prizes",
   "pro_tv_settings",
   "pro_tv_matches",
+  "card_image_overrides",
 ];
 const server = createServer(async (req, res) => {
   try {
@@ -101,6 +102,11 @@ const server = createServer(async (req, res) => {
         result = await db.query(`select public.${name}($1::jsonb) as value`, [
           JSON.stringify(payload.payload),
         ]);
+      else if (name === "save_deck_variant")
+        result = await db.query(
+          "select public.save_deck_variant($1::jsonb,$2::uuid) as value",
+          [JSON.stringify(payload.payload), payload.base],
+        );
       else if (name === "is_app_admin")
         result = await db.query(
           (req.headers.authorization ?? "").includes("Zml4dHVyZS1zaWduYXR1cmU")
@@ -108,7 +114,10 @@ const server = createServer(async (req, res) => {
             : "select false as value",
         );
       else if (name === "save_complementary_log")
-        result = await db.query("select public.save_complementary_log($1,$2,$3) as value",[payload.match_id,payload.original_log,payload.complementary_log]);
+        result = await db.query(
+          "select public.save_complementary_log($1,$2,$3) as value",
+          [payload.match_id, payload.original_log, payload.complementary_log],
+        );
       else if (name === "delete_entity")
         result = await db.query("select public.delete_entity($1,$2) as value", [
           payload.entity,
@@ -178,7 +187,9 @@ const server = createServer(async (req, res) => {
           (url.searchParams.get("combat_log") ?? "").replace(/^eq\./, ""),
         );
       } else {
-        const rawOrder = url.searchParams.get("order") ?? "id.asc";
+        const rawOrder =
+          url.searchParams.get("order") ??
+          (table === "card_image_overrides" ? "tcgdex_id.asc" : "id.asc");
         const order = rawOrder
           .split(",")
           .map((value) => {

@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element -- Small cached TCGdex thumbnails and a local card back. */
 "use client";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { AppData, CardPrinting, Match } from "@/types/domain";
 import { cardNameKey } from "@/lib/domain/combat-log";
 import { Modal } from "@/components/shared/modal";
@@ -40,7 +41,7 @@ export function ReplayImage({
   hidden?: boolean;
   onInspect?: (name: string) => void;
 }) {
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | undefined>();
   if (hidden || !name)
     return (
       <img
@@ -50,7 +51,7 @@ export function ReplayImage({
         draggable={false}
       />
     );
-  return src && !failed ? (
+  return src && failed !== src ? (
     <img
       className="replay-card-image"
       src={src}
@@ -64,7 +65,7 @@ export function ReplayImage({
           onInspect?.(name);
         }
       }}
-      onError={() => setFailed(true)}
+      onError={() => setFailed(src)}
       draggable={false}
     />
   ) : (
@@ -94,7 +95,8 @@ export function PrizeAvatar({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => setOpen(true)}
         className="prize-avatar"
@@ -110,7 +112,7 @@ export function PrizeAvatar({
         ) : (
           <span>?</span>
         )}
-      </button>
+      </Button>
       {open && (
         <CardInspection
           name={name}
@@ -132,7 +134,12 @@ function CardInspection({
   onClose: () => void;
 }) {
   return (
-    <Modal title={name} onClose={onClose}>
+    <Modal
+      bare
+      className="study-inspection-modal"
+      title={name}
+      onClose={onClose}
+    >
       <div className="card-inspection">
         <ReplayImage
           name={name}

@@ -24,6 +24,12 @@ function text(value: unknown): value is string {
 function fail(error: unknown): ActionResult {
   console.error("TCG Helper mutation failed", error);
   const e = error as { code?: string; message?: string };
+  if (e.code === "PGRST202" && e.message?.includes("save_deck_variant"))
+    return {
+      success: false,
+      error:
+        "Install 20261006_shared_card_art.sql in Supabase before saving deck variants.",
+    };
   if (e.code === "22P02" && e.message?.includes("card_type"))
     return {
       success: false,
@@ -110,13 +116,17 @@ export async function saveCard(input: {
     return fail(error);
   }
 }
-export async function saveDeck(input: DeckInput): Promise<ActionResult> {
+export async function saveDeck(
+  input: DeckInput,
+  variantOf?: string,
+): Promise<ActionResult> {
   if (
     !input ||
     !name(input.name) ||
     !text(input.playstyle) ||
     !text(input.notes) ||
     (input.id && !id(input.id)) ||
+    (variantOf !== undefined && (!id(variantOf) || !!input.id)) ||
     !Array.isArray(input.cards) ||
     !Array.isArray(input.variants) ||
     (input.new_cards !== undefined &&
@@ -175,13 +185,24 @@ export async function saveDeck(input: DeckInput): Promise<ActionResult> {
         .limit(0);
       if (schemaError) throw schemaError;
     }
-    const { data, error } = await client.rpc("save_deck", { payload: input });
+    const { data, error } = variantOf
+      ? await client.rpc("save_deck_variant", {
+          payload: input,
+          base: variantOf,
+        })
+      : await client.rpc("save_deck", { payload: input });
     if (error) throw error;
     refresh();
     return { success: true, id: data };
   } catch (error) {
     return fail(error);
   }
+}
+export async function saveDeckVariant(
+  input: DeckInput,
+  base: string,
+): Promise<ActionResult> {
+  return saveDeck(input, base);
 }
 export async function saveMatch(input: MatchInput): Promise<ActionResult> {
   if (typeof input?.notes === "string" && input.notes.length > 200)
@@ -290,7 +311,9 @@ export async function saveComplementaryLog(
     if (pair.status !== "matched")
       return { success: false, error: pair.message };
     const saved = await client.rpc("save_complementary_log", {
-      match_id: matchId, original_log: match.combat_log, complementary_log: raw,
+      match_id: matchId,
+      original_log: match.combat_log,
+      complementary_log: raw,
     });
     if (saved.error) throw saved.error;
     refresh();

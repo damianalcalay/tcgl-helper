@@ -87,6 +87,8 @@ export interface DeckCard {
   printings?: CardPrinting[];
 }
 export interface CardPrinting {
+  tera?: boolean;
+  tool?: boolean;
   quantity: number;
   set_code: string;
   collector_number: string;

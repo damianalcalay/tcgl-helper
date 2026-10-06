@@ -7,6 +7,7 @@ import {
 } from "@/types/domain";
 import type { ImportedCard } from "@/lib/domain/deck-import";
 import { cardNameKey } from "@/lib/domain/combat-log";
+import { teraMetadata } from "@/lib/domain/card-metadata";
 
 const API = "https://api.tcgdex.net/v2/en";
 // TCG Live abbreviations differ from TCGdex set IDs.
@@ -77,7 +78,7 @@ interface SetData {
   serie?: { name: string };
   cards: { id: string; localId: string | number; name: string }[];
 }
-interface CardData {
+export interface CardData {
   id: string;
   localId: string | number;
   name: string;
@@ -89,6 +90,9 @@ interface CardData {
   trainerType?: string;
   rarity?: string;
   energyType?: string;
+  abilities?: { type?: string; name?: string }[];
+  effect?: string;
+  set?: { id: string; name: string };
 }
 export function cardType(card: CardData): CardType | undefined {
   const normalize = (value?: string) =>
@@ -122,13 +126,35 @@ const normalNumber = (value: string | number) =>
   String(value)
     .replace(/^0+(?=\d)/, "")
     .toLowerCase();
-async function get<T>(path: string): Promise<T> {
+export async function tcgdexGet<T>(path: string): Promise<T> {
   const response = await fetch(`${API}/${path}`, {
     next: { revalidate: 86400 },
     signal: AbortSignal.timeout(12000),
   });
   if (!response.ok) throw new Error(`TCGdex returned ${response.status}`);
   return response.json();
+}
+const get = tcgdexGet;
+export function catalogPrinting(card: CardData, quantity = 1): CardPrinting {
+  const setId = card.set?.id ?? card.id.slice(0, card.id.lastIndexOf("-"));
+  return {
+    quantity,
+    set_code:
+      Object.entries(SETS).find(([, id]) => id === setId)?.[0] ??
+      setId.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+    collector_number: String(card.localId),
+    tcgdex_id: card.id,
+    set_id: setId,
+    set_name: card.set?.name,
+    resolved_type: cardType(card),
+    tool: ["tool", "pokemontool"].includes(
+      (card.trainerType ?? "").toLowerCase().replace(/[\s_-]/g, ""),
+    ),
+    tera: teraMetadata(card),
+    image_url: card.image?.startsWith("https://assets.tcgdex.net/en/")
+      ? `${card.image}/high.webp`
+      : undefined,
+  };
 }
 export async function enrichDeck(cards: ImportedCard[]) {
   const sets = new Map<string, Promise<SetData>>();
@@ -164,6 +190,10 @@ export async function enrichDeck(cards: ImportedCard[]) {
             ? `${card.image}/high.webp`
             : undefined,
           resolved_type: resolvedType,
+          tera: teraMetadata(card),
+          tool: ["tool", "pokemontool"].includes(
+            (card.trainerType ?? "").toLowerCase().replace(/[\s_-]/g, ""),
+          ),
         });
         if (!resolvedType)
           warnings.push(
@@ -222,6 +252,8 @@ export async function resolveLogCard(name: string) {
     return {
       name,
       type,
+      id: card.id,
+      tera: teraMetadata(card),
       image: card.image?.startsWith("https://assets.tcgdex.net/en/")
         ? `${card.image}/high.webp`
         : undefined,

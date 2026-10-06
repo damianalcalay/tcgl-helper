@@ -25,6 +25,8 @@ import {
   HelpCircle,
   Eraser,
   X,
+  Layers3,
+  ImagePlus,
 } from "lucide-react";
 import type { AppData, Match, CardType } from "@/types/domain";
 import {
@@ -33,11 +35,13 @@ import {
   parseCombatLog,
 } from "@/lib/domain/combat-log";
 import { replayBoard } from "@/lib/domain/combat-replay";
+import { printingTera } from "@/lib/domain/card-metadata";
 import {
   handVisible,
   moveTableCard,
-  setTableDamage,
   tableFromReplay,
+  benchCapacity,
+  isTablePokemon,
   type Mark,
   type TableCard,
   type TableState,
@@ -47,6 +51,10 @@ import { captureBoard } from "@/lib/board-capture";
 import { saveComplementaryLog } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/shared/modal";
+import { ChoiceSelect } from "@/components/shared/choice-select";
+import { DragScroll } from "@/components/shared/drag-scroll";
+import { TableTopSetup } from "./table-top-setup";
+import { PokemonEditor } from "./pokemon-editor";
 import { ReplayImage, CARD_BACKS, matchCardImage } from "./combat-log-view";
 
 const zones: Zone[] = [
@@ -169,10 +177,10 @@ export function CombatLogView({
         : { cards: [], marks: [] },
     [parsed, step, reveals],
   );
-  const state = editing ? history[cursor] : replay;
+  const current = editing ? history[cursor] : replay;
   const [selected, setSelected] = useState<string | null>(null),
-    [destinationOwner, setDestinationOwner] = useState(own),
     [destinationZone, setDestinationZone] = useState<Zone>("hand");
+  const [settingUp, setSettingUp] = useState(false);
   const [inspect, setInspect] = useState<string | null>(null);
   const [pile, setPile] = useState<{
       owner: string;
@@ -194,8 +202,44 @@ export function CombatLogView({
   const events = parsed?.events ?? [],
     event = events[step];
   const [art, setArt] = useState<
-    Record<string, { image?: string; type?: CardType }>
+    Record<string, { image?: string; type?: CardType; tera?: boolean }>
   >({});
+  const state = editing
+    ? current
+    : {
+        ...current,
+        cards: current.cards.map((c) => {
+          const key = cardNameKey(c.name ?? "");
+          const metadata = art[key];
+          const roster = data.rosters.find(
+            (r) =>
+              r.match_id === match.id &&
+              r.side === (c.owner === own ? "mine" : "opponent") &&
+              cardNameKey(r.card_name) === key,
+          );
+          const libraryCard = data.cards.find(
+            (a) => cardNameKey(a.name) === key,
+          );
+          const deckCard = data.deckCards.find(
+            (a) =>
+              a.deck_id ===
+                (c.owner === own ? match.deck_id : match.opponent_deck_id) &&
+              a.card_id === libraryCard?.id,
+          );
+          const printing = (roster?.printings ?? deckCard?.printings)?.[0];
+          return {
+            ...c,
+            printing,
+            type:
+              printing?.resolved_type ??
+              roster?.card_type ??
+              libraryCard?.type ??
+              metadata?.type,
+            tera: printingTera(printing) ?? metadata?.tera,
+            tool: printing?.tool,
+          };
+        }),
+      };
   useEffect(() => {
     const controller = new AbortController();
     const names = [
@@ -269,36 +313,36 @@ export function CombatLogView({
     setCursor(cursor + 1);
   }
   function leave() {
-    if (
-      editing &&
-      cursor > 0 &&
-      !window.confirm(
-        "Discard the manual board changes and return to the replay?",
-      )
-    )
-      return false;
     setHistory([]);
     setCursor(0);
     setSelected(null);
     setTool("select");
+    setMark(null);
+    setPile(null);
     return true;
   }
   function close() {
     if (leave()) onClose();
   }
   function openPile(owner: string, zone: "deck" | "discard") {
+    if (zone === "deck" && !editing) return;
     setPlaying(false);
     setFilter("All");
     setPile({ owner, zone });
   }
   function move(id: string, owner: string, zone: Zone, slot?: number) {
     if (editing) {
-      commit(moveTableCard(state, id, owner, zone, slot));
+      const next = moveTableCard(state, id, owner, zone, slot);
+      if (next === state) {
+        setToast("Choose a free position on the card owner’s side.");
+        return;
+      }
+      commit(next);
       setSelected(null);
     }
   }
   const chosen = state.cards.find((c) => c.id === selected);
-  function card(c: TableCard, hidden = false, small = false) {
+  function card(c: TableCard, hidden = false, small = false, count?: number) {
     const children = state.cards.filter((a) => a.parent === c.id);
     return (
       <div
@@ -310,7 +354,8 @@ export function CombatLogView({
           setSelected(c.id);
         }}
       >
-        <button
+        <Button
+          variant="ghost"
           className="study-card-button"
           data-capture-card
           aria-label={hidden ? "Hidden card" : (c.name ?? "Unknown card")}
@@ -322,21 +367,44 @@ export function CombatLogView({
         >
           <ReplayImage
             name={c.name ?? undefined}
-            src={c.name && !hidden ? image(c.name) : undefined}
+            src={
+              c.name && !hidden
+                ? (c.printing?.image_url ?? image(c.name))
+                : undefined
+            }
             hidden={hidden || !c.name}
             back={c.owner === own ? ownBack : otherBack}
           />
-        </button>
+        </Button>
+        {count !== undefined && (
+          <span className="study-copy-count">{count}</span>
+        )}
         {c.damage > 0 && (
           <span className="study-damage" data-capture-text>
             {c.damage}
           </span>
         )}
-        <div className="study-attachments">
+        <div
+          className="study-attachments"
+          style={
+            {
+              "--attachment-columns": Math.max(
+                4,
+                Math.ceil(
+                  Math.sqrt(
+                    children.filter((c) => c.attachment !== "evolution")
+                      .length * 1.5,
+                  ),
+                ),
+              ),
+            } as React.CSSProperties
+          }
+        >
           {children
             .filter((a) => a.attachment !== "evolution")
             .map((a) => (
-              <button
+              <Button
+                variant="ghost"
                 key={a.id}
                 data-capture-attachment
                 aria-label={a.name ?? "Unknown attachment"}
@@ -352,13 +420,14 @@ export function CombatLogView({
                   editing ? setSelected(a.id) : a.name && setInspect(a.name)
                 }
               >
-                {a.attachment === "energy"
-                  ? (a.name
-                      ?.replace("Basic ", "")
-                      .replace(" Energy", "")
-                      .slice(0, 1) ?? "?")
-                  : "T"}
-              </button>
+                <ReplayImage
+                  name={a.name ?? undefined}
+                  src={
+                    a.printing?.image_url ??
+                    (a.name ? image(a.name) : undefined)
+                  }
+                />
+              </Button>
             ))}
         </div>
       </div>
@@ -371,7 +440,17 @@ export function CombatLogView({
       },
       onDrop: (e: React.DragEvent) => {
         e.preventDefault();
-        move(e.dataTransfer.getData("text/plain"), owner, zone, slot);
+        e.stopPropagation();
+        const id = e.dataTransfer.getData("text/plain");
+        const source = state.cards.find((c) => c.id === id);
+        move(
+          id,
+          ["stadium", "played"].includes(zone)
+            ? (source?.owner ?? owner)
+            : owner,
+          zone,
+          slot,
+        );
       },
     };
   }
@@ -385,9 +464,37 @@ export function CombatLogView({
         {...dropProps(owner, zone)}
         aria-label={`${owner} ${zone}`}
       >
-        <div className="study-row-cards" data-capture-clip>
-          {cards.map((c) => card(c, hidden))}
-        </div>
+        <DragScroll className="study-row-cards" editing={editing}>
+          {zone === "bench" && editing
+            ? Array.from({ length: benchCapacity(state, owner) }, (_, slot) => (
+                <div
+                  key={slot}
+                  className="study-bench-slot"
+                  aria-label={`Bench position ${slot + 1} for ${owner}`}
+                  {...dropProps(owner, "bench", slot)}
+                >
+                  {cards.find((c) => c.slot === slot) ? (
+                    card(cards.find((c) => c.slot === slot)!)
+                  ) : (
+                    <span className="study-bench-marker">+</span>
+                  )}
+                </div>
+              ))
+            : cards.map((c) => card(c, hidden))}
+          {zone === "bench" &&
+            editing &&
+            cards
+              .filter((c) => (c.slot ?? 0) >= benchCapacity(state, owner))
+              .map((c) => card(c))}
+        </DragScroll>
+        {zone === "bench" &&
+          editing &&
+          cards.length > benchCapacity(state, owner) && (
+            <span role="alert" className="bench-overflow">
+              Bench exceeds {benchCapacity(state, owner)}. Move excess cards
+              manually.
+            </span>
+          )}
         {zone === "hand" && (
           <span
             className="study-count"
@@ -421,7 +528,8 @@ export function CombatLogView({
         <div className="study-hand-line">
           {row(owner, "hand", !handVisible(perspective, top))}
           <div className="study-discard" {...dropProps(owner, "discard")}>
-            <button
+            <Button
+              variant="ghost"
               className="study-pile-hit"
               aria-label={`View ${owner} discard pile`}
               onClick={() => openPile(owner, "discard")}
@@ -440,7 +548,7 @@ export function CombatLogView({
               ) : (
                 <span className="study-vacant" />
               )}
-            </button>
+            </Button>
           </div>
         </div>
         {row(owner, "bench")}
@@ -469,15 +577,17 @@ export function CombatLogView({
             {active && card(active)}
           </div>
           <div className="study-deck" {...dropProps(owner, "deck")}>
-            <button
+            <Button
+              variant="ghost"
               className="study-pile-hit"
               aria-label={`View ${owner} deck`}
+              disabled={!editing}
               onClick={() => openPile(owner, "deck")}
             >
               <span data-capture-card>
                 <ReplayImage back={owner === own ? ownBack : otherBack} />
               </span>
-            </button>
+            </Button>
             <span className="study-count" data-capture-text>
               {deck.length}
             </span>
@@ -553,6 +663,7 @@ export function CombatLogView({
       data.rosters.find(
         (a) => cardNameKey(a.card_name) === cardNameKey(c.name ?? ""),
       )?.card_type ??
+      c.type ??
       art[cardNameKey(c.name ?? "")]?.type;
     if (!type) return "Unknown";
     if (type.startsWith("energy") || type === "energy") return "Energy";
@@ -600,19 +711,14 @@ export function CombatLogView({
             ["Your card back", ownBack, setOwnBack],
             ["Opponent card back", otherBack, setOtherBack],
           ].map(([label, value, setter]) => (
-            <select
+            <ChoiceSelect
+              hideLabel
               key={String(label)}
-              aria-label={String(label)}
-              title={String(label)}
+              label={String(label)}
               value={String(value)}
-              onChange={(e) => (setter as (s: string) => void)(e.target.value)}
-            >
-              {CARD_BACKS.map((b) => (
-                <option key={b.value} value={b.value}>
-                  {b.label}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => (setter as (s: string) => void)(value)}
+              options={CARD_BACKS}
+            />
           ))}
           {icon(
             `Hand visibility: ${perspective}`,
@@ -635,15 +741,24 @@ export function CombatLogView({
               setPlaying(false);
               if (editing) leave();
               else {
-                setHistory([structuredClone(replay)]);
-                setCursor(0);
-                setDestinationOwner(own);
+                setSettingUp(true);
               }
             },
             !parsed,
             editing,
           )}
           {icon("Save boardstate", <Camera />, saveCapture, busy || !parsed)}
+          <Button
+            asChild
+            size="icon"
+            variant="ghost"
+            title="Complete missing card images"
+            aria-label="Complete missing card images"
+          >
+            <a href="/card-images" target="_blank" rel="noreferrer">
+              <ImagePlus />
+            </a>
+          </Button>
           {!publicMatch &&
             icon(
               "Add complementary log",
@@ -796,7 +911,9 @@ export function CombatLogView({
                 </div>
                 <div className="table-colors">
                   {colors.map((c) => (
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       key={c}
                       title={c}
                       aria-label={`Color ${c}`}
@@ -806,17 +923,16 @@ export function CombatLogView({
                     />
                   ))}
                 </div>
-                <select
-                  aria-label="Brush size"
-                  value={width}
-                  onChange={(e) => setWidth(Number(e.target.value))}
-                >
-                  {[2, 3, 5, 8].map((w) => (
-                    <option key={w} value={w}>
-                      {w}px
-                    </option>
-                  ))}
-                </select>
+                <ChoiceSelect
+                  hideLabel
+                  label="Brush size"
+                  value={String(width)}
+                  onChange={(w) => setWidth(Number(w))}
+                  options={[2, 3, 5, 8].map((w) => ({
+                    value: String(w),
+                    label: `${w}px`,
+                  }))}
+                />
                 <div className="table-tools">
                   {icon(
                     "Undo",
@@ -840,6 +956,11 @@ export function CombatLogView({
                     commit(structuredClone(history[0]));
                     setSelected(null);
                   })}
+                  {icon("Screenshot", <Camera />, saveCapture, busy)}
+                  {icon("Edit deck lists", <Layers3 />, () =>
+                    setSettingUp(true),
+                  )}
+                  {icon("Exit Table Top", <X />, leave)}
                 </div>
                 {chosen && (
                   <div className="table-move">
@@ -849,93 +970,29 @@ export function CombatLogView({
                         ? "Hidden card"
                         : (chosen.name ?? "Unknown card")}
                     </strong>
-                    <select
-                      aria-label="Move to player"
-                      value={destinationOwner}
-                      onChange={(e) => setDestinationOwner(e.target.value)}
-                    >
-                      {[own, opponent].map((p) => (
-                        <option key={p}>{p}</option>
-                      ))}
-                    </select>
-                    <select
-                      aria-label="Move to zone"
+                    <ChoiceSelect
+                      label="Move to zone"
                       value={destinationZone}
-                      onChange={(e) =>
-                        setDestinationZone(e.target.value as Zone)
-                      }
-                    >
-                      {zones.map((z) => (
-                        <option key={z}>{z}</option>
-                      ))}
-                    </select>
+                      onChange={(z) => setDestinationZone(z as Zone)}
+                      options={zones.map((value) => ({ value, label: value }))}
+                    />
                     <Button
                       size="sm"
                       onClick={() =>
-                        move(chosen.id, destinationOwner, destinationZone)
+                        move(chosen.id, chosen.owner, destinationZone)
                       }
                     >
                       Move
                     </Button>
-                    <label>
-                      Damage
-                      <input
-                        aria-label="Pokémon damage"
-                        type="number"
-                        min={0}
-                        value={chosen.damage}
-                        onChange={(e) =>
-                          commit(
-                            setTableDamage(
-                              state,
-                              chosen.id,
-                              Number(e.target.value),
-                            ),
-                          )
-                        }
+                    {!chosen.parent && isTablePokemon(chosen) && (
+                      <PokemonEditor
+                        key={chosen.id}
+                        state={state}
+                        pokemon={chosen}
+                        commit={commit}
+                        image={image}
                       />
-                    </label>
-                    <select
-                      aria-label="Attach to Pokémon"
-                      value=""
-                      onChange={(e) => {
-                        if (e.target.value)
-                          commit(
-                            moveTableCard(
-                              state,
-                              chosen.id,
-                              destinationOwner,
-                              "bench",
-                              undefined,
-                              e.target.value,
-                              /Energy/i.test(chosen.name ?? "")
-                                ? "energy"
-                                : "tool",
-                            ),
-                          );
-                      }}
-                    >
-                      <option value="">Attach to…</option>
-                      {state.cards
-                        .filter(
-                          (c) =>
-                            !c.parent &&
-                            ["active", "bench"].includes(c.zone) &&
-                            c.id !== chosen.id,
-                        )
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.owner} · {c.name}
-                          </option>
-                        ))}
-                    </select>
-                    {state.cards
-                      .filter((c) => c.parent === chosen.id)
-                      .map((c) => (
-                        <button key={c.id} onClick={() => setSelected(c.id)}>
-                          {c.attachment}: {c.name}
-                        </button>
-                      ))}
+                    )}
                   </div>
                 )}
               </aside>
@@ -979,18 +1036,17 @@ export function CombatLogView({
                 },
                 editing || step === events.length - 1,
               )}
-              <select
-                aria-label="Replay speed"
+              <ChoiceSelect
+                hideLabel
+                label="Replay speed"
                 value={speed}
                 disabled={editing}
-                onChange={(e) => setSpeed(e.target.value)}
-              >
-                {["0.5", "1", "1.5", "2", "4"].map((s) => (
-                  <option key={s} value={s}>
-                    x{s}
-                  </option>
-                ))}
-              </select>
+                onChange={setSpeed}
+                options={["0.5", "1", "1.5", "2", "4"].map((s) => ({
+                  value: s,
+                  label: "x" + s,
+                }))}
+              />
               <span>
                 {step + 1} / {events.length}
               </span>
@@ -1074,8 +1130,25 @@ export function CombatLogView({
           </div>
         </Modal>
       )}
+      {settingUp && (
+        <TableTopSetup
+          data={data}
+          match={match}
+          board={state}
+          players={[own, opponent]}
+          onClose={() => setSettingUp(false)}
+          onReady={(next) => {
+            setHistory([next]);
+            setCursor(0);
+            setSelected(null);
+            setTool("select");
+            setSettingUp(false);
+          }}
+        />
+      )}
       {pile && (
         <Modal
+          className="study-pile-modal"
           title={pile.zone === "deck" ? "Deck" : "Discard pile"}
           onClose={() => setPile(null)}
         >
@@ -1091,9 +1164,39 @@ export function CombatLogView({
             ))}
           </div>
           <div className="study-pile-grid">
-            {pileCards
-              .filter((c) => filter === "All" || category(c) === filter)
-              .map((c) => card(c))}
+            {Object.values(
+              pileCards
+                .filter((c) => filter === "All" || category(c) === filter)
+                .reduce<Record<string, TableCard[]>>((groups, c) => {
+                  const key =
+                    pile.zone === "deck"
+                      ? (c.printing?.tcgdex_id ?? c.name ?? c.id)
+                      : c.id;
+                  (groups[key] ??= []).push(c);
+                  return groups;
+                }, {}),
+            )
+              .sort((a, b) =>
+                pile.zone === "deck"
+                  ? ["Pokémon", "Trainers", "Energy", "Unknown"].indexOf(
+                      category(a[0]),
+                    ) -
+                      ["Pokémon", "Trainers", "Energy", "Unknown"].indexOf(
+                        category(b[0]),
+                      ) ||
+                    (a[0].name ?? "").localeCompare(b[0].name ?? "", "en", {
+                      sensitivity: "base",
+                    })
+                  : 0,
+              )
+              .map((copies) =>
+                card(
+                  copies[0],
+                  false,
+                  false,
+                  pile.zone === "deck" ? copies.length : undefined,
+                ),
+              )}
           </div>
           {pileCards.length === 0 && <p>No cards in this pile.</p>}
           {editing && selected && (
@@ -1109,7 +1212,12 @@ export function CombatLogView({
         </Modal>
       )}
       {inspect && (
-        <Modal title={inspect} onClose={() => setInspect(null)}>
+        <Modal
+          bare
+          className="study-inspection-modal"
+          title={inspect}
+          onClose={() => setInspect(null)}
+        >
           <div className="card-inspection">
             <ReplayImage
               name={inspect}

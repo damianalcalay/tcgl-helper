@@ -14,6 +14,7 @@ import {
   CircleHelp,
   LogOut,
   Tv,
+  ImagePlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -22,6 +23,7 @@ const links = [
   { href: "/decks", name: "Decks", icon: Layers3 },
   { href: "/notebook", name: "Notebook", icon: BookOpen },
   { href: "/stats", name: "Stats", icon: ChartNoAxesCombined },
+  { href: "/card-images", name: "Card images", icon: ImagePlus },
 ];
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();

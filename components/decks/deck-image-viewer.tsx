@@ -30,7 +30,8 @@ export function DeckImageViewer({
     );
   return (
     <>
-      <button
+      <Button
+        variant="ghost"
         type="button"
         className={`deck-image ${compact ? "image-compact" : ""}`}
         onClick={() => {
@@ -44,7 +45,7 @@ export function DeckImageViewer({
           <Maximize2 size={14} />
           View full image
         </span>
-      </button>
+      </Button>
       {open && (
         <Modal
           wide

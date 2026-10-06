@@ -13,6 +13,7 @@ import {
 import { redirect } from "next/navigation";
 import { hasEnvVars } from "@/lib/utils";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { applyManualImages } from "@/lib/card-images";
 async function allRows<T>(client: SupabaseClient, table: string): Promise<T[]> {
   const rows: T[] = [];
   for (let start = 0; ; start += 1000) {
@@ -74,6 +75,9 @@ export async function loadAppData(): Promise<{
           .createSignedUrl(deck.image_path, 3600);
         if (data) deck.image_url = data.signedUrl;
       }),
+    );
+    await applyManualImages(
+      [...deckCards, ...rosters].flatMap((row) => row.printings ?? []),
     );
     decks.sort((a, b) => a.name.localeCompare(b.name));
     cards.sort((a, b) => a.name.localeCompare(b.name));

@@ -134,10 +134,10 @@ test("Table Top conserves identities, moves bundles, swaps prizes, edits damage 
   );
   const attached = state.cards.filter((c) => c.parent === active.id);
   assert(attached.length >= 2);
-  state = setTableDamage(state, active.id, 999);
-  assert.equal(state.cards.find((c) => c.id === active.id).damage, 999);
+  state = setTableDamage(state, active.id, 990);
+  assert.equal(state.cards.find((c) => c.id === active.id).damage, 990);
   state = setTableDamage(state, active.id, -10);
-  assert.equal(state.cards.find((c) => c.id === active.id).damage, 0);
+  assert.equal(state.cards.find((c) => c.id === active.id).damage, 990);
   state = moveTableCard(state, active.id, "Ciberbrian", "bench");
   assert(
     state.cards

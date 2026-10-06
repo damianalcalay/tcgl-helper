@@ -236,19 +236,10 @@ test("personal complementary import rejects mismatches and persists a verified s
   );
   await page.getByLabel("Replay action", { exact: true }).fill("8");
   await page.getByRole("button", { name: "Table Top", exact: true }).click();
-  await page
-    .getByRole("button", { name: "View Ciberbrian deck", exact: true })
-    .click();
-  const pile = page.getByRole("dialog", { name: "Deck", exact: true });
-  await pile.locator(".study-card-button").first().click();
-  await pile
-    .getByRole("button", { name: "Move selected card to hand" })
-    .click();
-  await expect(pile).toHaveCount(0);
-  await expect(
-    page.locator(".study-bottom .study-hand .study-count"),
-  ).toHaveText("7");
-  page.once("dialog", (d) => d.accept());
+  const setup = page.getByRole("dialog", { name: "Prepare Table Top", exact: true });
+  await expect(setup).toBeVisible();
+  await expect(setup.getByRole("button", { name: "Review card allocation" })).toBeDisabled();
+  await setup.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page.getByRole("button", { name: "Close replay", exact: true }).click();
   const deleted = await request.post(`${api}/rpc/delete_entity`, {
     data: { entity: "deck", entity_id: deckId },

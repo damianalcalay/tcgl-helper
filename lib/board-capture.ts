@@ -62,8 +62,35 @@ export async function captureBoard(board: HTMLElement): Promise<Blob> {
     }
     const img = node.querySelector<HTMLImageElement>("img");
     if (img) {
+      if (node.hasAttribute("data-capture-attachment")) {
+        ctx.beginPath();
+        ctx.ellipse(
+          x + rect.width / 2,
+          y + rect.height / 2,
+          rect.width / 2,
+          rect.height / 2,
+          0,
+          0,
+          Math.PI * 2,
+        );
+        ctx.clip();
+      }
       ctx.filter = getComputedStyle(img).filter;
-      ctx.drawImage(loaded.get(img.src)!, x, y, rect.width, rect.height);
+      const loadedImage = loaded.get(img.src)!;
+      if (node.hasAttribute("data-capture-attachment")) {
+        const crop = Math.min(loadedImage.width, loadedImage.height) * 0.45;
+        ctx.drawImage(
+          loadedImage,
+          (loadedImage.width - crop) / 2,
+          (loadedImage.height - crop) / 2,
+          crop,
+          crop,
+          x,
+          y,
+          rect.width,
+          rect.height,
+        );
+      } else ctx.drawImage(loadedImage, x, y, rect.width, rect.height);
     } else {
       ctx.fillStyle = style.backgroundColor;
       ctx.fillRect(x, y, rect.width, rect.height);

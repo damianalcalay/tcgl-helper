@@ -27,11 +27,13 @@ import { useMutation } from "@/components/shared/use-mutation";
 import { DeckForm } from "./deck-form";
 import { CardForm } from "./card-form";
 import { DeckMosaic } from "./deck-mosaic";
+import { DeckVariantForm } from "./deck-variant-form";
 export function DecksView({ data }: { data: AppData }) {
   const params = useSearchParams();
   const [tab, setTab] = useState<"decks" | "cards">("decks");
   const [selectedId, setSelectedId] = useState(params.get("deck") ?? "");
   const [cardFilter, setCardFilter] = useState("");
+  const [variantBase, setVariantBase] = useState<string | null>(null);
   const [deckForm, setDeckForm] = useState<Deck | null | undefined>();
   const [cardForm, setCardForm] = useState<Card | null | undefined>();
   const [deleting, setDeleting] = useState<{
@@ -92,6 +94,13 @@ export function DecksView({ data }: { data: AppData }) {
   }
   return (
     <>
+      {variantBase && (
+        <DeckVariantForm
+          data={data}
+          baseId={variantBase}
+          onClose={() => setVariantBase(null)}
+        />
+      )}
       <PageHeader
         eyebrow="YOUR COLLECTION"
         title="Decks"
@@ -129,7 +138,8 @@ export function DecksView({ data }: { data: AppData }) {
       </div>
       <div className="section-toolbar">
         <div className="tabs" role="tablist" aria-label="Collection type">
-          <button
+          <Button
+            variant="ghost"
             role="tab"
             aria-selected={tab === "decks"}
             onClick={() => setTab("decks")}
@@ -137,8 +147,9 @@ export function DecksView({ data }: { data: AppData }) {
           >
             <Layers3 size={16} />
             My decks<span>{data.decks.length}</span>
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
             role="tab"
             aria-selected={tab === "cards"}
             onClick={() => setTab("cards")}
@@ -146,7 +157,7 @@ export function DecksView({ data }: { data: AppData }) {
           >
             <Library size={16} />
             Card library<span>{data.cards.length}</span>
-          </button>
+          </Button>
         </div>
         <div className="toolbar-search">
           <RegexCombobox
@@ -274,6 +285,13 @@ export function DecksView({ data }: { data: AppData }) {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="outline"
+                    onClick={() => setVariantBase(selected.id)}
+                  >
+                    <GitBranch />
+                    Create variant
+                  </Button>
+                  <Button
+                    variant="outline"
                     disabled={!deckRoster(data, selected.id).length}
                     onClick={() => exportDeck(selected.id)}
                   >
@@ -319,7 +337,8 @@ export function DecksView({ data }: { data: AppData }) {
                       data.variants
                         .filter((v) => v.deck_id === selected.id)
                         .map((v) => (
-                          <button
+                          <Button
+                            variant="ghost"
                             className="variant-chip"
                             key={v.variant_id}
                             onClick={() => setSelectedId(v.variant_id)}
@@ -329,7 +348,7 @@ export function DecksView({ data }: { data: AppData }) {
                                 ?.name
                             }
                             <ArrowUpRight size={14} />
-                          </button>
+                          </Button>
                         ))
                     ) : (
                       <p className="text-sm text-muted-foreground">
