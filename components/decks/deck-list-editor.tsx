@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Plus, Minus, Trash2, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { Plus, Minus, Trash2, Undo2, Redo2 } from "lucide-react";
 import type {
   AppData,
   CardOption,
@@ -13,38 +13,40 @@ import { cardNameKey } from "@/lib/domain/combat-log";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChoiceSelect } from "@/components/shared/choice-select";
-import { RegexCombobox } from "@/components/shared/regex-combobox";
+import { CardSearch } from "@/components/shared/card-search";
 import { ReplayImage } from "@/components/stats/combat-log-view";
 
 export function DeckListEditor({
   data,
   cards,
-  onChange,
+  onChange: notify,
+  grid = false,
+  importOnly = false,
+  hideImport = false,
+  onImported,
 }: {
   data: AppData;
   cards: CardOption[];
   onChange: (cards: CardOption[]) => void;
+  grid?: boolean;
+  importOnly?: boolean;
+  hideImport?: boolean;
+  onImported?: () => void;
 }) {
-  const [catalog, setCatalog] = useState<
-      { id: string; name: string; localId: string }[]
-    >([]),
-    [error, setError] = useState(""),
+  const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [text, setText] = useState(""),
-    [retry, setRetry] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/card-catalog", { signal: controller.signal })
-      .then(async (r) => {
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error);
-        setCatalog(j.cards);
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message);
-      });
-    return () => controller.abort();
-  }, [retry]);
+    [text, setText] = useState("");
+  const [history, setHistory] = useState<CardOption[][]>([cards]),
+    [cursor, setCursor] = useState(0);
+  function onChange(next: CardOption[]) {
+    setHistory((h) => [...h.slice(0, cursor + 1), next]);
+    setCursor(cursor + 1);
+    notify(next);
+  }
+  function travel(next: number) {
+    setCursor(next);
+    notify(history[next]);
+  }
   function quantity(id: string, n: number) {
     if (n < 0 || n > 60) return;
     onChange(
@@ -160,6 +162,7 @@ export function DeckListEditor({
           }),
         ),
       );
+      onImported?.();
       if (j.warnings?.length) setError(j.warnings.join(" "));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed.");
@@ -169,142 +172,172 @@ export function DeckListEditor({
   }
   return (
     <div className="deck-list-editor">
-      <div className="flex items-end gap-2">
-        <RegexCombobox
-          label="Add a Standard card"
-          value=""
-          options={catalog.map((c) => ({
-            value: c.id,
-            label: `${c.name} · ${c.id}`,
-          }))}
-          onChange={(id) => void add(id)}
-          disabled={busy}
-        />
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Retry Standard catalog"
-          onClick={() => setRetry((v) => v + 1)}
-        >
-          <RefreshCw />
-        </Button>
-      </div>
-      <small>
-        TCGdex Standard legality · refreshed daily. Regex search covers the full
-        current catalog.
-      </small>
-      <details>
-        <summary>Import a TCG Live list</summary>
-        <textarea
-          aria-label="TCG Live deck list"
-          rows={5}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
-        <Button disabled={busy || !text} onClick={importList}>
-          {busy ? "Importing…" : "Import list"}
-        </Button>
-      </details>
+      {!importOnly && (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <CardSearch onSelect={(id) => void add(id)} disabled={busy} />
+          <div className="flex gap-2">
+            <Button
+              size="icon"
+              variant="outline"
+              aria-label="Undo deck edit"
+              disabled={!cursor || busy}
+              onClick={() => travel(cursor - 1)}
+            >
+              <Undo2 />
+            </Button>
+            <Button
+              size="icon"
+              variant="outline"
+              aria-label="Redo deck edit"
+              disabled={cursor >= history.length - 1 || busy}
+              onClick={() => travel(cursor + 1)}
+            >
+              <Redo2 />
+            </Button>
+          </div>
+        </div>
+      )}
+      {!hideImport &&
+        (importOnly ? (
+          <>
+            <textarea
+              aria-label="TCG Live deck list"
+              className="deck-import-text"
+              rows={26}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            <Button disabled={busy || !text.trim()} onClick={importList}>
+              {busy ? "Importing…" : "Import"}
+            </Button>
+          </>
+        ) : (
+          <details>
+            <summary>Import a new TCG list</summary>
+            <textarea
+              aria-label="TCG Live deck list"
+              rows={8}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            <Button disabled={busy || !text.trim()} onClick={importList}>
+              {busy ? "Importing…" : "Import list"}
+            </Button>
+          </details>
+        ))}
       {error && <p role="alert">{error}</p>}
-      <strong>{cards.reduce((s, c) => s + c.quantity, 0)} / 60 cards</strong>
-      <div className="deck-edit-rows">
-        {cards.map((c) => (
-          <div key={c.id} className="deck-edit-row">
-            <div className="deck-edit-art">
-              <ReplayImage
-                name={c.name}
-                src={c.printings?.find((p) => p.image_url)?.image_url}
-              />
-            </div>
-            <span>
-              {c.name}
-              <small>
-                {c.printings
-                  ?.map((p) => `${p.set_code} ${p.collector_number}`)
-                  .join(" · ")}
-              </small>
-            </span>
-            <Button
-              size="icon"
-              variant="outline"
-              aria-label={`Remove one ${c.name}`}
-              onClick={() => quantity(c.id, c.quantity - 1)}
-            >
-              <Minus />
-            </Button>
-            <b>{c.quantity}</b>
-            <Button
-              size="icon"
-              variant="outline"
-              aria-label={`Add one ${c.name}`}
-              disabled={c.quantity >= 60}
-              onClick={() => quantity(c.id, c.quantity + 1)}
-            >
-              <Plus />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label={`Remove ${c.name}`}
-              onClick={() => quantity(c.id, 0)}
-            >
-              <Trash2 />
-            </Button>
-            {!c.printings?.some((p) => p.resolved_type) && (
-              <ChoiceSelect
-                label={`Type of ${c.name}`}
-                value={c.type}
-                onChange={(type) =>
-                  onChange(
-                    cards.map((a) =>
-                      a.id === c.id ? { ...a, type: type as CardType } : a,
-                    ),
-                  )
-                }
-                options={Object.entries(CARD_TYPES).map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-              />
-            )}
-            {c.printings?.map((p, i) =>
-              ![
-                "item",
-                "tool",
-                "supporter",
-                "stadium",
-                "ace_spec",
-                "energy",
-                "energy_basic",
-                "energy_special",
-              ].includes(c.type) ? (
-                <label key={i} className="tera-confirm">
-                  <Checkbox
-                    checked={p.tera === true}
-                    onCheckedChange={(checked) =>
+      {!importOnly && (
+        <>
+          <strong>
+            {cards.reduce((s, c) => s + c.quantity, 0)} / 60 cards
+          </strong>
+          <div
+            className={
+              grid ? "deck-edit-rows deck-edit-grid" : "deck-edit-rows"
+            }
+          >
+            {cards.map((c) => (
+              <div key={c.id} className="deck-edit-row">
+                <div className="deck-edit-art">
+                  <ReplayImage
+                    name={c.name}
+                    src={c.printings?.find((p) => p.image_url)?.image_url}
+                  />
+                  {grid && <b className="deck-copy-badge">{c.quantity}</b>}
+                </div>
+                <span>
+                  {c.name}
+                  <small>
+                    {c.printings
+                      ?.map((p) => `${p.set_code} ${p.collector_number}`)
+                      .join(" · ")}
+                  </small>
+                </span>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  aria-label={`Remove one ${c.name}`}
+                  onClick={() => quantity(c.id, c.quantity - 1)}
+                >
+                  <Minus />
+                </Button>
+                <b>{c.quantity}</b>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  aria-label={`Add one ${c.name}`}
+                  disabled={c.quantity >= 60}
+                  onClick={() => quantity(c.id, c.quantity + 1)}
+                >
+                  <Plus />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={`Remove ${c.name}`}
+                  onClick={() => quantity(c.id, 0)}
+                >
+                  <Trash2 />
+                </Button>
+                {!c.printings?.some((p) => p.resolved_type) && (
+                  <ChoiceSelect
+                    label={`Type of ${c.name}`}
+                    value={c.type}
+                    onChange={(type) =>
                       onChange(
                         cards.map((a) =>
-                          a.id === c.id
-                            ? {
-                                ...a,
-                                printings: a.printings?.map((x, j) =>
-                                  j === i
-                                    ? { ...x, tera: checked === true }
-                                    : x,
-                                ),
-                              }
-                            : a,
+                          a.id === c.id ? { ...a, type: type as CardType } : a,
                         ),
                       )
                     }
+                    options={Object.entries(CARD_TYPES).map(
+                      ([value, label]) => ({
+                        value,
+                        label,
+                      }),
+                    )}
                   />
-                  Tera · {p.set_code} {p.collector_number}
-                </label>
-              ) : null,
-            )}
+                )}
+                {c.printings?.map((p, i) =>
+                  ![
+                    "item",
+                    "tool",
+                    "supporter",
+                    "stadium",
+                    "ace_spec",
+                    "energy",
+                    "energy_basic",
+                    "energy_special",
+                  ].includes(c.type) ? (
+                    <label key={i} className="tera-confirm">
+                      <Checkbox
+                        checked={p.tera === true}
+                        onCheckedChange={(checked) =>
+                          onChange(
+                            cards.map((a) =>
+                              a.id === c.id
+                                ? {
+                                    ...a,
+                                    printings: a.printings?.map((x, j) =>
+                                      j === i
+                                        ? { ...x, tera: checked === true }
+                                        : x,
+                                    ),
+                                  }
+                                : a,
+                            ),
+                          )
+                        }
+                      />
+                      Tera · {p.set_code} {p.collector_number}
+                    </label>
+                  ) : null,
+                )}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
     </div>
   );
 }

@@ -26,6 +26,7 @@ const {
   moveTableCard,
   setTableDamage,
   prepareTable,
+  prepareHypotheticalTable,
   benchCapacity,
   addTableEnergy,
   moveTableCardsToHand,
@@ -42,6 +43,73 @@ const c = (id, owner, zone, name, type, extra = {}) => ({
   type,
   damage: 0,
   ...extra,
+});
+
+test("deck saving counts replaced copies with the 70 percent boundary and ignores printings", () => {
+  const { deckChangeRatio } = load("lib/domain/deck-changes.ts");
+  const original = [{ name: "Energy A", quantity: 60 }];
+  assert.equal(
+    deckChangeRatio(original, [
+      { name: "Energy A", quantity: 19 },
+      { name: "Energy B", quantity: 41 },
+    ]) < 0.7,
+    true,
+  );
+  assert.equal(
+    deckChangeRatio(original, [
+      { name: "Energy A", quantity: 18 },
+      { name: "Energy B", quantity: 42 },
+    ]),
+    0.7,
+  );
+  assert.equal(
+    deckChangeRatio(original, [
+      { name: "Energy A", quantity: 60, printings: [{ tcgdex_id: "other" }] },
+    ]),
+    0,
+  );
+  assert.equal(deckChangeRatio([], original), 1);
+});
+
+test("one-step hypothetical preparation reconciles hidden counters and preserves a field absent from an edited list", () => {
+  const board = {
+    cards: [
+      c("starter", "you", "active", "Starter", "basic", { damage: 40 }),
+      ...Array.from({ length: 52 }, (_, i) =>
+        c("hidden" + i, "you", "deck", null),
+      ),
+    ],
+    marks: [],
+  };
+  const snapshot = JSON.stringify(board);
+  const prepared = prepareHypotheticalTable(board, {
+    you: [{ id: "energy", name: "Energy", type: "energy_basic", quantity: 60 }],
+  });
+  assert.equal(prepared.errors.length, 0);
+  assert.equal(prepared.state.cards[0].name, "Starter");
+  assert.equal(prepared.state.cards[0].damage, 40);
+  assert.equal(prepared.state.cards[0].cloned, true);
+  assert.equal(
+    prepared.state.cards.filter((c) => c.name === "Energy").length,
+    60,
+  );
+  assert.equal(JSON.stringify(board), snapshot);
+  assert(prepareHypotheticalTable(board, { you: [] }).errors.length);
+  const moved = {
+    ...prepared.state,
+    cards: prepared.state.cards.map((card) =>
+      card.id === "allocation-you-0" ? { ...card, zone: "hand" } : card,
+    ),
+  };
+  const changed = prepareHypotheticalTable(moved, {
+    you: [
+      { id: "other", name: "Other Energy", type: "energy_basic", quantity: 60 },
+    ],
+  }).state;
+  assert.equal(
+    new Set(changed.cards.map((c) => c.id)).size,
+    changed.cards.length,
+  );
 });
 test("annotations translate and resize all stroke points without changing their source; question size preserves its top anchor", () => {
   const { markBounds, translateMark, resizeMark } = load(

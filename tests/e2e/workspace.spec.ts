@@ -912,7 +912,7 @@ test("combat log inference, perspective correction, full-screen save and board r
   });
   await expect(setup).toBeVisible();
   await expect(
-    setup.getByRole("button", { name: "Review card allocation" }),
+    setup.getByRole("button", { name: "Enter Table Top" }),
   ).toBeDisabled();
   await setup
     .getByRole("button", { name: "Close dialog", exact: true })

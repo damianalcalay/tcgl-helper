@@ -542,6 +542,66 @@ export function prepareTable(
         },
       };
 }
+/** Preserve the frozen field; changed deck lists supply an editable hypothetical inventory. */
+export function prepareHypotheticalTable(
+  state: TableState,
+  lists: Record<string, CardOption[]>,
+) {
+  const cards = state.cards.map((c) => ({ ...c }));
+  for (const [owner, list] of Object.entries(lists)) {
+    const available = new Map(
+      list.map((c) => [cardNameKey(c.name), c.quantity]),
+    );
+    for (const c of cards.filter(
+      (c) => c.owner === owner && c.name && !c.cloned,
+    )) {
+      if (c.zone === "deck" && c.hypothetical) {
+        Object.assign(c, {
+          name: null,
+          type: undefined,
+          printing: undefined,
+          tera: undefined,
+          tool: undefined,
+        });
+        continue;
+      }
+      const key = cardNameKey(c.name!);
+      if ((available.get(key) ?? 0) > 0)
+        available.set(key, available.get(key)! - 1);
+      else {
+        c.cloned = true;
+        c.hypothetical = true;
+      }
+    }
+    const owned = cards.filter((c) => c.owner === owner && !c.cloned);
+    let excess = owned.length - 60;
+    for (let i = cards.length - 1; i >= 0 && excess > 0; i--)
+      if (
+        cards[i].owner === owner &&
+        cards[i].zone === "deck" &&
+        !cards[i].name &&
+        !cards[i].cloned
+      ) {
+        cards.splice(i, 1);
+        excess--;
+      }
+    const missing =
+      60 - cards.filter((c) => c.owner === owner && !c.cloned).length;
+    let sequence = 0;
+    for (let i = 0; i < missing; i++) {
+      while (cards.some((c) => c.id === `allocation-${owner}-${sequence}`))
+        sequence++;
+      cards.push({
+        id: `allocation-${owner}-${sequence++}`,
+        owner,
+        name: null,
+        zone: "deck",
+        damage: 0,
+      });
+    }
+  }
+  return prepareTable({ ...state, cards }, lists);
+}
 export function handVisible(
   mode: "you" | "opponent" | "both",
   isOpponent: boolean,

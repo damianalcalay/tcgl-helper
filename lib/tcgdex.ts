@@ -32,6 +32,7 @@ const SETS: Record<string, string> = {
   PFL: "me02",
   ASC: "me02.5",
   POR: "me03",
+  CRI: "me04",
   SWSH: "swshp",
   SVP: "svp",
   MEP: "mep",

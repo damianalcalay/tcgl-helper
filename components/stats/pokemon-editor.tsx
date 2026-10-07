@@ -53,12 +53,25 @@ export function PokemonEditor({
       commit(addTableEnergy(state, pokemon.id, name, source));
       return;
     }
-    const c = own.find(
-      (a) => a.name === name && a.zone === source && !a.parent,
-    );
+    let working = state;
+    let c = own.find((a) => a.name === name && a.zone === source && !a.parent);
+    if (!c && source === "deck") {
+      const template = fullDeckCards(state, pokemon.owner).find(
+        (a) => a.name === name && isTableTool(a),
+      );
+      if (template) {
+        c = {
+          ...template,
+          id: crypto.randomUUID(),
+          cloned: true,
+          hypothetical: true,
+        };
+        working = { ...state, cards: [...state.cards, c] };
+      }
+    }
     if (!c) return;
     const next = moveTableCard(
-      state,
+      working,
       c.id,
       pokemon.owner,
       pokemon.zone,
@@ -268,6 +281,7 @@ export function PokemonEditor({
                   aria-pressed={attached}
                   disabled={
                     !attached &&
+                    source !== "deck" &&
                     !own.some(
                       (c) => c.name === name && c.zone === source && !c.parent,
                     )

@@ -3,15 +3,17 @@ import { useEffect, useState } from "react";
 import type { AppData, CardOption, Match } from "@/types/domain";
 import { deckRoster, matchRoster } from "@/lib/domain/logic";
 import { persistedPrintings } from "@/lib/domain/deck-import";
-import { prepareTable, type TableState } from "@/lib/domain/table-top";
+import {
+  prepareHypotheticalTable,
+  type TableState,
+} from "@/lib/domain/table-top";
 import { saveDeck, saveDeckVariant } from "@/app/actions";
 import { Modal } from "@/components/shared/modal";
 import { ChoiceSelect } from "@/components/shared/choice-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { deckChangeRatio } from "@/lib/domain/deck-changes";
 import { DeckListEditor } from "@/components/decks/deck-list-editor";
-import { ReplayImage } from "./combat-log-view";
 
 export function TableTopSetup({
   data,
@@ -29,17 +31,17 @@ export function TableTopSetup({
   onReady: (state: TableState) => void;
 }) {
   const [owner, setOwner] = useState(players[0]),
-    [base, setBase] = useState(board),
     [lists, setLists] = useState<Record<string, CardOption[]>>(() =>
       Object.fromEntries(
         players.map((p, i) => [
           p,
-          matchRoster(
-            data,
-            match,
-            i === 0 ? match.deck_id : (match.opponent_deck_id ?? ""),
-            i === 0 ? "mine" : "opponent",
-          ),
+          board.deckLists?.[p] ??
+            matchRoster(
+              data,
+              match,
+              i === 0 ? match.deck_id : (match.opponent_deck_id ?? ""),
+              i === 0 ? "mine" : "opponent",
+            ),
         ]),
       ),
     ),
@@ -52,12 +54,10 @@ export function TableTopSetup({
     [name, setName] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [allocation, setAllocation] = useState<TableState | null>(null),
-    [confirmed, setConfirmed] = useState(false);
+    [editor, setEditor] = useState<"edit" | "import" | null>(null);
   function change(rows: CardOption[]) {
     setLists({ ...lists, [owner]: rows });
-    setAllocation(null);
-    setConfirmed(false);
+    setError("");
   }
   const printingKey = JSON.stringify([
     ...new Set(
@@ -112,7 +112,7 @@ export function TableTopSetup({
     setError("");
     const rows = lists[owner];
     const payload = {
-      name: name.trim() || `${owner} deck`,
+      name: name.trim() || `${owner === players[0] ? "You" : "Opponent"} deck`,
       playstyle: "",
       notes: "",
       image_path: null,
@@ -152,11 +152,10 @@ export function TableTopSetup({
       setError("Deck saved. It is now available in Decks.");
     }
   }
-  const result = prepareTable(base, lists),
-    total = lists[owner]?.reduce((s, c) => s + c.quantity, 0) ?? 0;
-  const unknown = base.cards.filter(
-    (c) => !c.name && ["hand", "prizes"].includes(c.zone),
-  );
+  const original = savedLists[ids[owner]] ?? deckRoster(data, ids[owner] ?? "");
+  const ratio = deckChangeRatio(original, lists[owner] ?? []);
+  const total = (lists[owner] ?? []).reduce((sum, c) => sum + c.quantity, 0);
+  const prepared = prepareHypotheticalTable(board, lists);
   return (
     <Modal
       title="Prepare Table Top"
@@ -173,220 +172,119 @@ export function TableTopSetup({
             variant={owner === p ? "default" : "outline"}
             onClick={() => setOwner(p)}
           >
-            {p}
+            {p === players[0] ? "You" : "Opponent"}
           </Button>
         ))}
       </div>
-      {!allocation ? (
-        <>
-          <ChoiceSelect
-            label={`Deck for ${owner}`}
-            value={ids[owner] ?? ""}
-            placeholder="Select a saved deck or import below"
-            options={savedDecks.map((d) => ({
-              value: d.id,
-              label:
-                d.name +
-                (data.variants.some((v) => v.variant_id === d.id)
-                  ? " · variant"
-                  : ""),
-            }))}
-            onChange={(id) => {
-              setIds({ ...ids, [owner]: id });
-              change(savedLists[id] ?? deckRoster(data, id));
-            }}
-          />
+      <div className="table-setup-content">
+        <ChoiceSelect
+          label={owner === players[0] ? "Deck for You" : "Deck for Opponent"}
+          value={ids[owner] ?? ""}
+          placeholder="Select a deck or import a new list"
+          options={savedDecks.map((d) => ({
+            value: d.id,
+            label:
+              d.name +
+              (data.variants.some((v) => v.variant_id === d.id)
+                ? " · variant"
+                : ""),
+          }))}
+          onChange={(id) => {
+            setIds({ ...ids, [owner]: id });
+            change(savedLists[id] ?? deckRoster(data, id));
+          }}
+        />
+        <div className="flex gap-3 flex-wrap">
+          <Button variant="outline" onClick={() => setEditor("edit")}>
+            Edit current deck
+          </Button>
+          <Button variant="outline" onClick={() => setEditor("import")}>
+            Import a new TCG list
+          </Button>
+        </div>
+        <div className="flex gap-4 text-sm">
+          {players.map((p, i) => (
+            <span key={p}>
+              {i === 0 ? "You" : "Opponent"}:{" "}
+              {(lists[p] ?? []).reduce((sum, c) => sum + c.quantity, 0)} / 60
+            </span>
+          ))}
+        </div>
+        {!prepared.state && (
+          <p role="alert">
+            {prepared.errors
+              .map((e) =>
+                e
+                  .replaceAll(players[0], "You")
+                  .replaceAll(players[1], "Opponent"),
+              )
+              .join(" ")}
+          </p>
+        )}
+        <Button
+          disabled={busy || !prepared.state}
+          onClick={() => onReady(prepared.state!)}
+        >
+          Enter Table Top
+        </Button>
+      </div>
+      {editor && (
+        <Modal
+          title={
+            editor === "edit"
+              ? "Edit deck for Table Top"
+              : "Import a new TCG list"
+          }
+          wide
+          busy={busy}
+          onClose={() => setEditor(null)}
+          className="table-deck-editor-modal"
+        >
           <DeckListEditor
-            key={owner}
+            key={owner + editor}
             data={data}
             cards={lists[owner] ?? []}
             onChange={change}
+            grid
+            hideImport={editor === "edit"}
+            importOnly={editor === "import"}
+            onImported={() => setEditor(null)}
           />
-          <div className="flex flex-wrap gap-2">
-            <Input
-              aria-label="Save deck name"
-              placeholder="Deck / variant name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <Button
-              variant="outline"
-              disabled={busy || total !== 60}
-              onClick={() => persist(false)}
-            >
-              Save as deck
-            </Button>
-            <Button
-              variant="outline"
-              disabled={busy || total !== 60 || !ids[owner]}
-              onClick={() => persist(true)}
-            >
-              Save variant
-            </Button>
-          </div>
-          {players.map((p) => {
-            const count = base.cards.filter(
-              (c) => c.owner === p && !c.cloned,
-            ).length;
-            return count !== 60 && !base.deckLists ? (
-              <div key={p} role="alert">
-                <p>
-                  {p}: replay has {count} copies. Keep all known cards and
-                  reconcile only the unknown deck counter to 60.
-                </p>
-                <Button
-                  variant="outline"
-                  disabled={
-                    count > 60 &&
-                    base.cards.filter(
-                      (c) => c.owner === p && !c.name && c.zone === "deck",
-                    ).length <
-                      count - 60
-                  }
-                  onClick={() => {
-                    const cards = base.cards.map((c) => ({ ...c }));
-                    if (count > 60) {
-                      let remove = count - 60;
-                      for (let i = cards.length - 1; i >= 0 && remove; i--)
-                        if (
-                          cards[i].owner === p &&
-                          !cards[i].name &&
-                          cards[i].zone === "deck"
-                        ) {
-                          cards.splice(i, 1);
-                          remove--;
-                        }
-                    } else
-                      for (let i = count; i < 60; i++)
-                        cards.push({
-                          id: crypto.randomUUID(),
-                          owner: p,
-                          name: null,
-                          zone: "deck",
-                          damage: 0,
-                        });
-                    setBase({ ...base, cards });
-                  }}
-                >
-                  Reconcile {p} deck counter
+          {editor === "edit" && (
+            <div className="table-deck-save">
+              <Input
+                aria-label="Save deck name"
+                placeholder="Deck / variant name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <div className="flex gap-3 flex-wrap">
+                {ratio >= 0.7 || !ids[owner] ? (
+                  <Button
+                    disabled={busy || total !== 60}
+                    onClick={() => persist(false)}
+                  >
+                    Save as deck
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={busy || total !== 60 || !ids[owner]}
+                    onClick={() => persist(true)}
+                  >
+                    Save variant
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setEditor(null)}>
+                  Done
                 </Button>
               </div>
-            ) : null;
-          })}
-          {result.errors.map((e, i) => (
-            <p role="alert" key={i}>
-              {e}
-            </p>
-          ))}
-          {result.errors.length > 0 &&
-            base.cards.some((c) => c.zone === "deck" && c.hypothetical) && (
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setBase({
-                    ...base,
-                    cards: base.cards.map((c) =>
-                      c.zone === "deck" && c.hypothetical
-                        ? {
-                            ...c,
-                            name: null,
-                            type: undefined,
-                            printing: undefined,
-                            tera: undefined,
-                            tool: undefined,
-                          }
-                        : c,
-                    ),
-                  })
-                }
-              >
-                Reallocate hypothetical deck copies from these lists
-              </Button>
-            )}
-          <Button
-            disabled={busy || !result.state}
-            onClick={() => {
-              setAllocation(result.state!);
-              setConfirmed(false);
-            }}
-          >
-            Review card allocation
-          </Button>
-        </>
-      ) : (
-        <>
-          <p>
-            Unknown cards below have a hypothetical allocation. Change each hand
-            / prize card as needed; copies swap with the deck. The remaining
-            deck is an unordered inventory, never the original draw order.
-          </p>
-          <div className="allocation-grid">
-            {unknown.map((original) => {
-              const c = allocation.cards.find((a) => a.id === original.id)!;
-              const available = allocation.cards.filter(
-                (a) => a.owner === c.owner && a.zone === "deck" && !a.parent,
-              );
-              const names = [
-                ...new Set([c.name, ...available.map((a) => a.name)]),
-              ].filter((n): n is string => !!n);
-              return (
-                <div key={c.id}>
-                  <small>
-                    {c.owner} · {c.zone}
-                    {c.slot !== undefined ? ` ${c.slot + 1}` : ""}
-                  </small>
-                  <ReplayImage
-                    name={c.name ?? undefined}
-                    src={c.printing?.image_url}
-                  />
-                  <ChoiceSelect
-                    label={`Allocate ${c.owner} ${c.zone} ${c.id}`}
-                    hideLabel
-                    value={c.name ?? ""}
-                    options={names.map((n) => ({ value: n, label: n }))}
-                    onChange={(name) => {
-                      const copy = available.find((a) => a.name === name);
-                      if (!copy) return;
-                      const metadata = (a: typeof c) => ({
-                        name: a.name,
-                        type: a.type,
-                        printing: a.printing,
-                        tera: a.tera,
-                        tool: a.tool,
-                      });
-                      setAllocation({
-                        ...allocation,
-                        cards: allocation.cards.map((a) =>
-                          a.id === c.id
-                            ? { ...a, ...metadata(copy) }
-                            : a.id === copy.id
-                              ? { ...a, ...metadata(c) }
-                              : a,
-                        ),
-                      });
-                      setConfirmed(false);
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </div>
-          <label className="flex gap-2 items-center">
-            <Checkbox
-              checked={confirmed}
-              onCheckedChange={(v) => setConfirmed(v === true)}
-            />
-            Use this allocation for the hypothetical scenario
-          </label>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setAllocation(null)}>
-              Back to lists
-            </Button>
-            <Button disabled={!confirmed} onClick={() => onReady(allocation)}>
-              Enter Table Top
-            </Button>
-          </div>
-        </>
+              <small>
+                {Math.round(ratio * 100)}% of copies changed · new deck from 70%
+              </small>
+              {error && <p role="status">{error}</p>}
+            </div>
+          )}
+        </Modal>
       )}
       {error && <p role="status">{error}</p>}
     </Modal>

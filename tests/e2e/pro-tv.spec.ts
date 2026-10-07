@@ -249,7 +249,7 @@ test("personal complementary import rejects mismatches and persists a verified s
   });
   await expect(setup).toBeVisible();
   await expect(
-    setup.getByRole("button", { name: "Review card allocation" }),
+    setup.getByRole("button", { name: "Enter Table Top" }),
   ).toBeDisabled();
   await setup
     .getByRole("button", { name: "Close dialog", exact: true })

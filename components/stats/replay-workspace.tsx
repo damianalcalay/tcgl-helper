@@ -61,6 +61,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/shared/modal";
 import { ChoiceSelect } from "@/components/shared/choice-select";
 import { DragScroll } from "@/components/shared/drag-scroll";
+import { CardSearch } from "@/components/shared/card-search";
 import { TableTopSetup } from "./table-top-setup";
 import { AnnotationLayer } from "./annotation-layer";
 import { markBounds, resizeMark } from "@/lib/domain/annotations";
@@ -185,6 +186,10 @@ export function CombatLogView({
   const current = editing ? history[cursor] : replay;
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedMark, setSelectedMark] = useState<string | null>(null);
+  const annotationClipboard = useRef<Mark | null>(null);
+  const [creatingCard, setCreatingCard] = useState(false);
+  const [creatingBusy, setCreatingBusy] = useState(false);
+  const [creatingError, setCreatingError] = useState("");
   const [annotationSize, setAnnotationSize] = useState(48);
   const [settingUp, setSettingUp] = useState(false);
   const [capturing, setCapturing] = useState(false);
@@ -360,6 +365,37 @@ export function CombatLogView({
         return;
       }
       if (!(e.ctrlKey || e.metaKey)) return;
+      if (key === "c" && selectedMark) {
+        const mark = current.marks.find((m) => m.id === selectedMark);
+        if (mark) {
+          e.preventDefault();
+          annotationClipboard.current = {
+            ...mark,
+            points: mark.points.map((p) => ({ ...p })),
+          };
+        }
+      }
+      if (key === "v" && annotationClipboard.current) {
+        e.preventDefault();
+        const source = annotationClipboard.current;
+        const bounds = markBounds(source);
+        const dx = Math.max(
+          -bounds.x,
+          Math.min(16, boardSize.width - bounds.x - bounds.width),
+        );
+        const dy = Math.max(
+          -bounds.y,
+          Math.min(16, boardSize.height - bounds.y - bounds.height),
+        );
+        const copy = {
+          ...source,
+          id: crypto.randomUUID(),
+          points: source.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+        };
+        annotationClipboard.current = copy;
+        commit({ ...current, marks: [...current.marks, copy] });
+        setSelectedMark(copy.id);
+      }
       if (key === "z") {
         e.preventDefault();
         setCursor((c) =>
@@ -377,7 +413,15 @@ export function CombatLogView({
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [editing, history.length, selectedMark, current, cursor, commit]);
+  }, [
+    editing,
+    history.length,
+    selectedMark,
+    current,
+    cursor,
+    commit,
+    boardSize,
+  ]);
   function leave() {
     setHistory([]);
     setCursor(0);
@@ -671,6 +715,21 @@ export function CombatLogView({
       >
         <div className="study-hand-line">
           {row(owner, "hand", !handVisible(perspective, top))}
+          {editing && !top && (
+            <Button
+              className="study-create-card"
+              variant="outline"
+              size="icon"
+              aria-label="Create a card"
+              title="Create a card"
+              onClick={() => {
+                setCreatingError("");
+                setCreatingCard(true);
+              }}
+            >
+              <Layers3 />
+            </Button>
+          )}
           <div className="study-discard" {...dropProps(owner, "discard")}>
             <Button
               variant="ghost"
@@ -718,7 +777,16 @@ export function CombatLogView({
             {...dropProps(owner, "active")}
             aria-label={`${owner} active`}
           >
-            {active && card(active)}
+            {active
+              ? card(active)
+              : editing && (
+                  <span
+                    className="study-bench-marker"
+                    aria-label="Empty active position"
+                  >
+                    +
+                  </span>
+                )}
           </div>
           <div className="study-deck" {...dropProps(owner, "deck")}>
             <Button
@@ -976,6 +1044,17 @@ export function CombatLogView({
                 {...dropProps(own, "stadium")}
                 aria-label="Stadium"
               >
+                {editing &&
+                  !state.cards.some(
+                    (c) => c.zone === "stadium" && !c.parent,
+                  ) && (
+                    <span
+                      className="study-bench-marker"
+                      aria-label="Empty stadium position"
+                    >
+                      +
+                    </span>
+                  )}
                 {state.cards
                   .filter((c) => c.zone === "stadium" && !c.parent)
                   .map((c) => card(c))}
@@ -1267,6 +1346,75 @@ export function CombatLogView({
               Verify and save
             </Button>
           </div>
+        </Modal>
+      )}
+      {creatingCard && (
+        <Modal
+          title="Create a card"
+          onClose={() => setCreatingCard(false)}
+          busy={creatingBusy}
+        >
+          <CardSearch
+            disabled={creatingBusy}
+            onSelect={async (id) => {
+              if (
+                state.cards.filter(
+                  (c) => c.owner === own && c.zone === "hand" && !c.parent,
+                ).length >= 25
+              ) {
+                setCreatingError("The hand is limited to 25 cards.");
+                return;
+              }
+              setCreatingBusy(true);
+              setCreatingError("");
+              try {
+                const r = await fetch(
+                    `/api/card-catalog?id=${encodeURIComponent(id)}`,
+                  ),
+                  j = await r.json();
+                if (!r.ok || !j.type)
+                  throw Error(j.error ?? "Card data unavailable.");
+                commit({
+                  ...state,
+                  cards: [
+                    ...state.cards,
+                    {
+                      id: crypto.randomUUID(),
+                      owner: own,
+                      name: j.name,
+                      type: j.type,
+                      printing: j.printing,
+                      tera: j.printing.tera,
+                      tool: j.printing.tool,
+                      zone: "hand",
+                      damage: 0,
+                      cloned: true,
+                      hypothetical: true,
+                    },
+                  ],
+                });
+                setCreatingCard(false);
+              } catch (e) {
+                setCreatingError(
+                  e instanceof Error ? e.message : "Could not create card.",
+                );
+              } finally {
+                setCreatingBusy(false);
+              }
+            }}
+          />
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => {
+              setCreatingCard(false);
+              openPile(own, "deck");
+              setFilter("Full deck");
+            }}
+          >
+            Create from your full deck
+          </Button>
+          {creatingError && <p role="alert">{creatingError}</p>}
         </Modal>
       )}
       {settingUp && (

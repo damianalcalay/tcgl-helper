@@ -233,26 +233,14 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     exact: true,
   });
   await expect(setup).toBeVisible();
-  await setup
-    .getByRole("button", { name: "Review card allocation", exact: true })
-    .click();
-  for (const selector of await setup
-    .getByRole("button", { name: /^Allocate Ciberbrian prizes / })
-    .all()) {
-    await selector.click();
-    await page
-      .locator('[role="menu"][data-state="open"]')
-      .getByRole("menuitemradio", {
-        name: "Basic Fighting Energy",
-        exact: true,
-      })
-      .click();
-  }
-  await setup
-    .getByRole("checkbox", {
-      name: "Use this allocation for the hypothetical scenario",
-    })
-    .check();
+  await expect(
+    setup.getByRole("button", { name: "You", exact: true }),
+  ).toBeVisible();
+  await expect(setup.getByText("Review card allocation")).toHaveCount(0);
+  await expect(setup.locator(".modal-inner")).toHaveJSProperty(
+    "scrollHeight",
+    await setup.locator(".modal-inner").evaluate((n) => n.clientHeight),
+  );
   await setup
     .getByRole("button", { name: "Enter Table Top", exact: true })
     .click();
@@ -260,6 +248,9 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     page.getByLabel("Replay action", { exact: true }),
   ).toBeDisabled();
   await expect(page.locator(".study-bottom .study-bench-slot")).toHaveCount(5);
+  await expect(
+    page.getByLabel("Empty stadium position", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Move to player", exact: true }),
   ).toHaveCount(0);
@@ -381,7 +372,10 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
       })
       .click();
   await page
-    .getByRole("button", { name: "View Ciberbrian deck", exact: true })
+    .getByRole("button", { name: "Create a card", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Create from your full deck", exact: true })
     .click();
   const fullDeck = page.getByRole("dialog", { name: "Deck", exact: true });
   await expect(fullDeck.locator(".study-filters button").last()).toHaveText(
@@ -434,12 +428,36 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     exact: true,
   });
   await editLists
+    .getByRole("button", { name: "Edit current deck", exact: true })
+    .click();
+  const deckEditor = page.getByRole("dialog", {
+    name: "Edit deck for Table Top",
+    exact: true,
+  });
+  const lastCopy = deckEditor.getByRole("button", {
+    name: "Remove one Rescue Board",
+    exact: true,
+  });
+  await lastCopy.click();
+  await expect(lastCopy).toHaveCount(0);
+  await deckEditor
+    .getByRole("button", { name: "Undo deck edit", exact: true })
+    .click();
+  await expect(lastCopy).toBeVisible();
+  await deckEditor
+    .getByRole("button", { name: "Redo deck edit", exact: true })
+    .click();
+  await expect(lastCopy).toHaveCount(0);
+  await deckEditor
+    .getByRole("button", { name: "Undo deck edit", exact: true })
+    .click();
+  await deckEditor
     .getByLabel("Save deck name", { exact: true })
     .fill("Second iteration fixture edited variant");
-  await editLists
+  await deckEditor
     .getByRole("button", { name: "Save variant", exact: true })
     .click();
-  await expect(editLists.getByRole("status")).toContainText("Deck saved");
+  await expect(deckEditor.getByRole("status")).toContainText("Deck saved");
   const savedDecks = await (await request.get(`${api}/decks`)).json();
   const parent = savedDecks.find(
       (d: { name: string }) => d.name === "Second iteration fixture Ciberbrian",
@@ -457,6 +475,55 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
         v.deck_id === parent.id && v.variant_id === variant.id,
     ),
   ).toBeTruthy();
+  await deckEditor.getByRole("button", { name: "Done", exact: true }).click();
+  await page.route("**/api/deck-import", (route) =>
+    route.fulfill({
+      json: {
+        cards: [
+          {
+            name: "Basic Water Energy",
+            quantity: 60,
+            category: "energy",
+            printings: [
+              {
+                quantity: 60,
+                set_code: "MEE",
+                collector_number: "11",
+                resolved_type: "energy_basic",
+              },
+            ],
+          },
+        ],
+        warnings: [],
+      },
+    }),
+  );
+  await editLists
+    .getByRole("button", { name: "Import a new TCG list", exact: true })
+    .click();
+  const importModal = page.getByRole("dialog", {
+    name: "Import a new TCG list",
+    exact: true,
+  });
+  await importModal
+    .getByLabel("TCG Live deck list", { exact: true })
+    .fill("Energy: 60\n60 Basic Water Energy MEE 11");
+  await importModal
+    .getByRole("button", { name: "Import", exact: true })
+    .click();
+  await expect(importModal).toHaveCount(0);
+  await editLists
+    .getByRole("button", { name: "Edit current deck", exact: true })
+    .click();
+  await expect(deckEditor.locator(".deck-edit-row")).toHaveCount(1);
+  await expect(
+    deckEditor.getByRole("button", { name: "Save as deck", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    deckEditor.getByRole("button", { name: "Save variant", exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({ path: "test-results/table-top-deck-editor.png" });
+  await deckEditor.getByRole("button", { name: "Done", exact: true }).click();
   await editLists
     .getByRole("button", { name: "Close dialog", exact: true })
     .click();
@@ -479,6 +546,7 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   const count = Number(
     await page.locator(".study-bottom .study-hand .study-count").innerText(),
   );
+  await deck.getByRole("button", { name: "Full deck", exact: true }).click();
   await deck
     .getByRole("button", { name: "Area Zero Underdepths", exact: true })
     .click();
@@ -489,7 +557,7 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     })
     .click();
   await deck
-    .getByRole("button", { name: "Move selected cards to hand (2)" })
+    .getByRole("button", { name: "Copy selected cards to hand (2)" })
     .click();
   await expect(
     page.locator(".study-bottom .study-hand .study-count"),
@@ -634,6 +702,17 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   expect(
     Number(await questionMark.locator("text").getAttribute("font-size")),
   ).toBeGreaterThan(96);
+  await page.keyboard.press("Control+c");
+  await page.keyboard.press("Control+v");
+  await expect(page.locator(".table-annotations text")).toHaveCount(2);
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".table-annotations text")).toHaveCount(1);
+  await page.keyboard.press("Control+y");
+  await expect(page.locator(".table-annotations text")).toHaveCount(2);
+  await questionMark.locator("text").last().click();
+  await page.keyboard.press("Delete");
+  await expect(page.locator(".table-annotations text")).toHaveCount(1);
+  await questionMark.locator("text").click();
   await page.keyboard.press("Delete");
   await expect(page.locator(".table-annotations text")).toHaveCount(0);
   await expect(page.locator(".table-annotations [data-mark]")).toHaveCount(1);
@@ -776,10 +855,10 @@ test("deck variants add cards from the full Standard regex catalog without chang
     })
     .click();
   await form
-    .getByRole("combobox", { name: "Add a Standard card", exact: true })
+    .getByRole("button", { name: "Add a Standard card", exact: true })
     .click();
   await form
-    .getByRole("searchbox", { name: "Search Add a Standard card", exact: true })
+    .getByRole("textbox", { name: "Search Standard cards", exact: true })
     .fill("^Arv.*166$");
   await form.getByRole("option", { name: /Arven/ }).click();
   await expect(

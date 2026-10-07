@@ -10,6 +10,47 @@ import {
   currentExpansionId,
   releasedExpansion,
 } from "@/lib/domain/current-expansions";
+import { Script } from "node:vm";
+
+type Brief = { id: string; name: string; localId: string };
+let cachedCards: { cards: Brief[]; expires: number } | undefined;
+let pendingCards: Promise<Brief[]> | undefined;
+async function standardCards() {
+  if (cachedCards && cachedCards.expires > Date.now()) return cachedCards.cards;
+  if (!pendingCards)
+    pendingCards = loadStandardCards()
+      .then((cards) => {
+        cachedCards = { cards, expires: Date.now() + 86400000 };
+        return cards;
+      })
+      .finally(() => {
+        pendingCards = undefined;
+      });
+  return pendingCards;
+}
+async function loadStandardCards() {
+  // Nested legality filters are not consistently supported by the brief-card endpoint.
+  const [cards, sets] = await Promise.all([
+    tcgdexGet<Brief[]>("cards"),
+    tcgdexGet<{ id: string; name: string }[]>("sets"),
+  ]);
+  const eligible = sets.filter((s) => currentExpansionId(s.id));
+  const released = new Set<string>(["sve", "mee"]);
+  for (let i = 0; i < eligible.length; i += 5) {
+    const details = await Promise.all(
+      eligible
+        .slice(i, i + 5)
+        .map((s) =>
+          tcgdexGet<{ id: string; releaseDate: string }>(`sets/${s.id}`),
+        ),
+    );
+    for (const s of details)
+      if (releasedExpansion(s.releaseDate)) released.add(s.id);
+  }
+  return cards.filter((c) =>
+    released.has(c.id.slice(0, c.id.lastIndexOf("-"))),
+  );
+}
 
 export async function GET(request: Request) {
   const client = await createClient();
@@ -83,9 +124,41 @@ export async function GET(request: Request) {
         })),
       });
     }
+    const query = params.get("q");
+    if (query !== null) {
+      if (!query.trim()) return Response.json({ cards: [] });
+      if (query.length > 120)
+        return Response.json(
+          { error: "Use at most 120 characters." },
+          { status: 400 },
+        );
+      try {
+        new RegExp(query, "i");
+      } catch {
+        return Response.json(
+          { error: "Invalid regular expression." },
+          { status: 400 },
+        );
+      }
+      const rows = await standardCards();
+      try {
+        const matches = new Script(
+          'const matcher = new RegExp(pattern, "i"); rows.filter(c => matcher.test(c.name + " · " + c.id)).slice(0, 80)',
+        ).runInNewContext({ pattern: query, rows }, { timeout: 50 });
+        return Response.json({
+          cards: matches,
+          limited: matches.length === 80,
+        });
+      } catch {
+        return Response.json(
+          { error: "This expression is too complex. Simplify the search." },
+          { status: 400 },
+        );
+      }
+    }
     return Response.json({
-      cards: await tcgdexGet("cards?legal.standard=eq:true"),
-      source: "TCGdex · Standard legality (updated daily)",
+      cards: await standardCards(),
+      source: "Current released Standard expansions",
     });
   } catch {
     return Response.json(
