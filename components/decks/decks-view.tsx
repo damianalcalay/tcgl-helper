@@ -213,6 +213,7 @@ export function DecksView({ data }: { data: AppData }) {
                           <Button
                             variant="ghost"
                             size="icon"
+                            disabled={mutation.pending}
                             aria-label={`Delete ${d.name}`}
                             onClick={() => {
                               mutation.setError("");
@@ -439,6 +440,7 @@ export function DecksView({ data }: { data: AppData }) {
                             <Button
                               variant="ghost"
                               size="icon"
+                              disabled={mutation.pending}
                               aria-label={`Delete ${c.name}`}
                               onClick={() => {
                                 mutation.setError("");
@@ -483,7 +485,9 @@ export function DecksView({ data }: { data: AppData }) {
               ? `“${deleting.name}” and all ${data.matches.filter((m) => m.deck_id === deleting.id || m.opponent_deck_id === deleting.id).length} matches involving this deck (including as an opponent), their card records and prizes will be permanently deleted.`
               : `“${deleting.name}” will be permanently deleted. Cards used by a deck or match cannot be deleted until those references are removed.`
           }
-          onClose={() => setDeleting(null)}
+          onClose={() => {
+            if (!mutation.pending) setDeleting(null);
+          }}
           onConfirm={remove}
           pending={mutation.pending}
           error={mutation.error}

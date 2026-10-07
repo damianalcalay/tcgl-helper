@@ -12,6 +12,7 @@ export function Modal({
   closeOnBackdrop = true,
   className = "",
   bare = false,
+  hideClose = false,
 }: {
   title: string;
   description?: string;
@@ -22,6 +23,7 @@ export function Modal({
   closeOnBackdrop?: boolean;
   className?: string;
   bare?: boolean;
+  hideClose?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -50,15 +52,17 @@ export function Modal({
               <h2>{title}</h2>
               {description && <p>{description}</p>}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={busy}
-              onClick={onClose}
-              aria-label="Close dialog"
-            >
-              <X />
-            </Button>
+            {!hideClose && (
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={busy}
+                onClick={onClose}
+                aria-label="Close dialog"
+              >
+                <X />
+              </Button>
+            )}
           </div>
         )}
         {children}
@@ -89,6 +93,7 @@ export function ConfirmDialog({
       description={description}
       onClose={onClose}
       busy={pending}
+      hideClose
     >
       <div role="alertdialog" aria-label={title}>
         <ErrorMessage error={error} />

@@ -26,6 +26,7 @@ export interface TableCard {
   tera?: boolean;
   tool?: boolean;
   hypothetical?: boolean;
+  cloned?: boolean;
 }
 export interface Mark {
   id: string;
@@ -118,6 +119,25 @@ export function moveTableCard(
 ): TableState {
   const card = state.cards.find((c) => c.id === id);
   if (!card || card.owner !== owner) return state;
+  if (zone === "hand" && card.zone !== "hand") {
+    const incoming = 1 + state.cards.filter((c) => c.parent === id).length;
+    if (
+      state.cards.filter(
+        (c) => c.owner === owner && c.zone === "hand" && !c.parent,
+      ).length +
+        incoming >
+      25
+    )
+      return state;
+  }
+  if (
+    parent &&
+    attachment === "energy" &&
+    card.parent !== parent &&
+    state.cards.filter((c) => c.parent === parent && c.attachment === "energy")
+      .length >= 15
+  )
+    return state;
   const cards = state.cards.map((c) => ({ ...c }));
   const moving = cards.find((c) => c.id === id)!;
   if (
@@ -234,7 +254,90 @@ export function moveTableCard(
       c.attachment = undefined;
     }
   }
+  for (const player of new Set(cards.map((c) => c.owner))) {
+    const before = state.cards.filter(
+      (c) => c.owner === player && c.zone === "hand" && !c.parent,
+    ).length;
+    const after = cards.filter(
+      (c) => c.owner === player && c.zone === "hand" && !c.parent,
+    ).length;
+    if (after > 25 && after > before) return state;
+  }
   return { ...state, cards };
+}
+/** Hypothetical attachments may clone an energy from the owner's list. */
+export function addTableEnergy(
+  state: TableState,
+  pokemonId: string,
+  name: string | null,
+  source = "deck",
+): TableState {
+  const pokemon = state.cards.find(
+    (c) => c.id === pokemonId && !c.parent && isTablePokemon(c),
+  );
+  if (
+    !pokemon ||
+    state.cards.filter(
+      (c) => c.parent === pokemonId && c.attachment === "energy",
+    ).length >= 15
+  )
+    return state;
+  const available = state.cards.find(
+    (c) =>
+      c.owner === pokemon.owner &&
+      c.name === name &&
+      isTableEnergy(c) &&
+      !c.parent &&
+      c.zone === source,
+  );
+  if (available)
+    return moveTableCard(
+      state,
+      available.id,
+      pokemon.owner,
+      pokemon.zone,
+      undefined,
+      pokemonId,
+      "energy",
+    );
+  const template = state.cards.find(
+    (c) => c.owner === pokemon.owner && c.name === name && isTableEnergy(c),
+  );
+  if (!template) return state;
+  let sequence = state.cards.length;
+  while (state.cards.some((c) => c.id === `energy-clone-${sequence}`))
+    sequence++;
+  return {
+    ...state,
+    cards: [
+      ...state.cards,
+      {
+        ...template,
+        id: `energy-clone-${sequence}`,
+        cloned: true,
+        zone: pokemon.zone,
+        slot: undefined,
+        parent: pokemonId,
+        attachment: "energy",
+        damage: 0,
+        hypothetical: true,
+      },
+    ],
+  };
+}
+/** Move a selection atomically so a full hand never causes a partial transfer. */
+export function moveTableCardsToHand(
+  state: TableState,
+  ids: string[],
+  owner: string,
+): TableState {
+  let next = state;
+  for (const id of new Set(ids)) {
+    const moved = moveTableCard(next, id, owner, "hand");
+    if (moved === next) return state;
+    next = moved;
+  }
+  return next;
 }
 export function setTableDamage(
   state: TableState,
@@ -332,7 +435,7 @@ export function prepareTable(
         copies.push({ name: c.name, type: c.type });
       return copies.slice(0, c.quantity);
     });
-    const owned = cards.filter((c) => c.owner === owner);
+    const owned = cards.filter((c) => c.owner === owner && !c.cloned);
     if (owned.length !== 60)
       errors.push(
         `${owner}: the replay reconstructs ${owned.length} copies, but the deck has 60. Correct the replay allocation before editing.`,

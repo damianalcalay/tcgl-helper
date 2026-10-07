@@ -4,6 +4,7 @@ import { Fragment, useState } from "react";
 import { parseCombatLog } from "@/lib/domain/combat-log";
 import { AppData, Match } from "@/types/domain";
 import {
+  MoreVertical,
   ScrollText,
   Pencil,
   Trash2,
@@ -11,6 +12,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import * as Menu from "@radix-ui/react-dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RegexCombobox } from "@/components/shared/regex-combobox";
 export function MatchHistory({
   matches,
@@ -166,37 +169,42 @@ export function MatchHistory({
                       className="history-actions"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="flex flex-col gap-1">
-                        {m.combat_log && (
+                      <Menu.Root modal={false}>
+                        <Menu.Trigger asChild>
                           <Button
-                            size="sm"
-                            variant="outline"
-                            aria-label="View combat log"
-                            onClick={() => setCombatMatch(m)}
+                            size="icon"
+                            variant="ghost"
+                            aria-label="Match options"
                           >
-                            <ScrollText />
-                            Log / Replay
+                            <MoreVertical />
                           </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          aria-label="Edit match"
-                          onClick={() => onEdit(m)}
+                        </Menu.Trigger>
+                        <Menu.Content
+                          align="end"
+                          sideOffset={4}
+                          className="z-50 min-w-[160px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
                         >
-                          <Pencil />
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          aria-label="Delete match"
-                          onClick={() => onDelete(m)}
-                        >
-                          <Trash2 />
-                          Delete
-                        </Button>
-                      </div>
+                          {m.combat_log && (
+                            <DropdownMenuItem
+                              onSelect={() => setCombatMatch(m)}
+                            >
+                              <ScrollText />
+                              Review match
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onSelect={() => onEdit(m)}>
+                            <Pencil />
+                            Edit match
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onSelect={() => onDelete(m)}
+                          >
+                            <Trash2 />
+                            Delete match
+                          </DropdownMenuItem>
+                        </Menu.Content>
+                      </Menu.Root>
                     </td>
                   </tr>
                   {open && (

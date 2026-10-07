@@ -6,6 +6,10 @@ import {
 } from "@/lib/tcgdex";
 import { applyManualImages, manualImages } from "@/lib/card-images";
 import { createClient } from "@/lib/supabase/server";
+import {
+  currentExpansionId,
+  releasedExpansion,
+} from "@/lib/domain/current-expansions";
 
 export async function GET(request: Request) {
   const client = await createClient();
@@ -36,8 +40,31 @@ export async function GET(request: Request) {
         printing,
       });
     }
-    if (params.has("sets"))
-      return Response.json({ sets: await tcgdexGet("sets") });
+    if (params.has("sets")) {
+      const all = await tcgdexGet<{ id: string; name: string }[]>("sets");
+      const candidates = all.filter((s) => currentExpansionId(s.id));
+      const sets: { id: string; name: string; releaseDate: string }[] = [];
+      for (let i = 0; i < candidates.length; i += 5) {
+        sets.push(
+          ...(await Promise.all(
+            candidates
+              .slice(i, i + 5)
+              .map((s) =>
+                tcgdexGet<{ id: string; name: string; releaseDate: string }>(
+                  `sets/${s.id}`,
+                ),
+              ),
+          )),
+        );
+      }
+      return Response.json({
+        sets: sets
+          .filter((s) => releasedExpansion(s.releaseDate))
+          .sort((a, b) => b.releaseDate.localeCompare(a.releaseDate))
+          .map((s) => ({ id: s.id, name: s.name, releaseDate: s.releaseDate })),
+        source: "2026 Standard expansion pool · H onwards · newest first",
+      });
+    }
     if (set) {
       const data = await tcgdexGet<{
         id: string;

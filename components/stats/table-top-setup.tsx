@@ -225,7 +225,9 @@ export function TableTopSetup({
             </Button>
           </div>
           {players.map((p) => {
-            const count = base.cards.filter((c) => c.owner === p).length;
+            const count = base.cards.filter(
+              (c) => c.owner === p && !c.cloned,
+            ).length;
             return count !== 60 ? (
               <div key={p} role="alert">
                 <p>

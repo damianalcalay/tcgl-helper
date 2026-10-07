@@ -22,9 +22,14 @@ function load(file) {
   );
   return exports;
 }
-const { moveTableCard, setTableDamage, prepareTable, benchCapacity } = load(
-  "lib/domain/table-top.ts",
-);
+const {
+  moveTableCard,
+  setTableDamage,
+  prepareTable,
+  benchCapacity,
+  addTableEnergy,
+  moveTableCardsToHand,
+} = load("lib/domain/table-top.ts");
 const { teraMetadata, printingTera } = load("lib/domain/card-metadata.ts");
 const c = (id, owner, zone, name, type, extra = {}) => ({
   id,
@@ -34,6 +39,88 @@ const c = (id, owner, zone, name, type, extra = {}) => ({
   type,
   damage: 0,
   ...extra,
+});
+test("hypothetical energies use the deck then clone only owned energy types up to fifteen", () => {
+  const original = {
+    marks: [],
+    cards: [
+      c("p", "you", "active", "Pokemon", "basic"),
+      c("e", "you", "deck", "Energy", "energy_basic"),
+      c("r", "opponent", "deck", "Rival energy", "energy_basic"),
+    ],
+  };
+  let next = addTableEnergy(original, "p", "Energy");
+  assert.equal(next.cards.length, original.cards.length);
+  assert.equal(next.cards.find((c) => c.id === "e").parent, "p");
+  for (let i = 1; i < 15; i++) next = addTableEnergy(next, "p", "Energy");
+  assert.equal(next.cards.filter((c) => c.parent === "p").length, 15);
+  assert.equal(addTableEnergy(next, "p", "Energy"), next);
+  assert.equal(addTableEnergy(original, "p", "Rival energy"), original);
+  assert.equal(original.cards.find((c) => c.id === "e").zone, "deck");
+  const fullDeck = {
+    ...original,
+    cards: [
+      original.cards[0],
+      original.cards[1],
+      ...Array.from({ length: 58 }, (_, i) =>
+        c(`copy-${i}`, "you", "deck", "Energy", "energy_basic"),
+      ),
+    ],
+  };
+  let cloned = fullDeck;
+  // A different source deliberately clones once exhausted without changing the deck list.
+  cloned = addTableEnergy(cloned, "p", "Energy", "discard");
+  const prepared = prepareTable(cloned, {
+    you: [
+      { id: "pokemon", name: "Pokemon", type: "basic", quantity: 1 },
+      { id: "energy", name: "Energy", type: "energy_basic", quantity: 59 },
+    ],
+  });
+  assert.equal(prepared.errors.length, 0);
+  assert.equal(prepared.state.cards.length, 61);
+});
+test("batch transfers enforce twenty five hand cards atomically and preserve ownership", () => {
+  const original = {
+    marks: [],
+    cards: [
+      ...Array.from({ length: 23 }, (_, i) =>
+        c(`h${i}`, "you", "hand", "Card", "basic"),
+      ),
+      c("d1", "you", "deck", "One", "basic"),
+      c("d2", "you", "deck", "Two", "basic"),
+      c("d3", "you", "deck", "Three", "basic"),
+      c("r", "opponent", "deck", "Rival", "basic"),
+    ],
+  };
+  assert.equal(
+    moveTableCardsToHand(original, ["d1", "d2", "d3"], "you"),
+    original,
+  );
+  assert.equal(moveTableCardsToHand(original, ["d1", "r"], "you"), original);
+  const next = moveTableCardsToHand(original, ["d1", "d2"], "you");
+  assert.equal(
+    next.cards.filter((c) => c.owner === "you" && c.zone === "hand").length,
+    25,
+  );
+  assert.equal(moveTableCard(next, "d3", "you", "hand"), next);
+});
+test("current expansion pool excludes old sets, promos and unreleased tournament sets", () => {
+  const { currentExpansionId, releasedExpansion } = load(
+    "lib/domain/current-expansions.ts",
+  );
+  for (const id of ["sv05", "sv06.5", "sv10.5b", "me04", "me02.5"])
+    assert.equal(currentExpansionId(id), true);
+  for (const id of ["sv01", "sv04.5", "swsh12", "svp", "mep"])
+    assert.equal(currentExpansionId(id), false);
+  assert.equal(releasedExpansion("2026-07-17", Date.parse("2026-10-07")), true);
+  assert.equal(
+    releasedExpansion("2026-11-06", Date.parse("2026-10-07")),
+    false,
+  );
+  assert.equal(
+    releasedExpansion("2026-10-01", Date.parse("2026-10-07")),
+    false,
+  );
 });
 test("ownership restrictions reject moving and attaching across both sides without mutating state", () => {
   const state = {

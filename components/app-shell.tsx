@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTheme } from "next-themes";
 import {
   BookOpen,
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { hasEnvVars } from "@/lib/utils";
 const links = [
+  { href: "/pro-tv", name: "Pro TV", icon: Tv },
   { href: "/decks", name: "Decks", icon: Layers3 },
   { href: "/notebook", name: "Notebook", icon: BookOpen },
   { href: "/stats", name: "Stats", icon: ChartNoAxesCombined },
@@ -29,20 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { setTheme, resolvedTheme } = useTheme();
-  const [proTv, setProTv] = useState(false);
-  useEffect(() => {
-    if (!hasEnvVars) return;
-    const client = createClient();
-    Promise.all([
-      client.from("pro_tv_settings").select("enabled").eq("id", true).single(),
-      client.rpc("is_app_admin"),
-    ]).then(([setting, admin]) =>
-      setProTv(Boolean(setting.data?.enabled || admin.data)),
-    );
-  }, [path]);
-  const navigation = proTv
-    ? [...links, { href: "/pro-tv", name: "Pro TV", icon: Tv }]
-    : links;
+  const navigation = links;
   if (path.startsWith("/auth"))
     return <div className="min-h-screen bg-background">{children}</div>;
   return (

@@ -13,6 +13,9 @@ import {
   ScanEye,
   Pencil,
   Camera,
+  LoaderCircle,
+  Minus,
+  Plus,
   Upload,
   Undo2,
   Redo2,
@@ -39,6 +42,7 @@ import { printingTera } from "@/lib/domain/card-metadata";
 import {
   handVisible,
   moveTableCard,
+  moveTableCardsToHand,
   tableFromReplay,
   benchCapacity,
   isTablePokemon,
@@ -181,6 +185,12 @@ export function CombatLogView({
   const [selected, setSelected] = useState<string | null>(null),
     [destinationZone, setDestinationZone] = useState<Zone>("hand");
   const [settingUp, setSettingUp] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [energyPokemon, setEnergyPokemon] = useState<string | null>(null);
+  const [pileSelection, setPileSelection] = useState<Record<string, number>>(
+    {},
+  );
+  const captureRunning = useRef(false);
   const [inspect, setInspect] = useState<string | null>(null);
   const [pile, setPile] = useState<{
       owner: string;
@@ -302,10 +312,10 @@ export function CombatLogView({
     return () => clearTimeout(timer);
   }, [playing, editing, step, speed, events.length]);
   useEffect(() => {
-    if (!toast) return;
+    if (!toast || capturing) return;
     const timer = setTimeout(() => setToast(""), 4500);
     return () => clearTimeout(timer);
-  }, [toast]);
+  }, [toast, capturing]);
   const image = (name: string) =>
     matchCardImage(data, match, name) ?? art[cardNameKey(name)]?.image;
   function commit(next: TableState) {
@@ -328,6 +338,8 @@ export function CombatLogView({
     if (zone === "deck" && !editing) return;
     setPlaying(false);
     setFilter("All");
+    setPileSelection({});
+    setSelected(null);
     setPile({ owner, zone });
   }
   function move(id: string, owner: string, zone: Zone, slot?: number) {
@@ -361,7 +373,20 @@ export function CombatLogView({
           aria-label={hidden ? "Hidden card" : (c.name ?? "Unknown card")}
           onClick={() => {
             setPlaying(false);
-            if (editing) setSelected(c.id);
+            if (editing && pile?.zone === "deck" && c.zone === "deck") {
+              const key = c.printing?.tcgdex_id ?? c.name ?? c.id;
+              const max = state.cards.filter(
+                (a) =>
+                  !a.parent &&
+                  a.owner === c.owner &&
+                  a.zone === "deck" &&
+                  (a.printing?.tcgdex_id ?? a.name ?? a.id) === key,
+              ).length;
+              setPileSelection((selection) => ({
+                ...selection,
+                [key]: Math.min(max, (selection[key] ?? 0) + 1),
+              }));
+            } else if (editing) setSelected(c.id);
             else if (!hidden && c.name) setInspect(c.name);
           }}
         >
@@ -400,8 +425,36 @@ export function CombatLogView({
             } as React.CSSProperties
           }
         >
+          {children.filter((a) => a.attachment === "energy").length > 4 && (
+            <Button
+              variant="ghost"
+              className="study-attachment study-energy-stack"
+              aria-label={`View attached energies for ${c.name}`}
+              onClick={() => setEnergyPokemon(c.id)}
+              data-capture-attachment
+            >
+              <ReplayImage
+                name={
+                  children.find((a) => a.attachment === "energy")?.name ??
+                  undefined
+                }
+                src={image(
+                  children.find((a) => a.attachment === "energy")?.name ?? "",
+                )}
+              />
+              <span data-capture-text>
+                {children.filter((a) => a.attachment === "energy").length}
+              </span>
+            </Button>
+          )}
           {children
-            .filter((a) => a.attachment !== "evolution")
+            .filter(
+              (a) =>
+                a.attachment !== "evolution" &&
+                (a.attachment !== "energy" ||
+                  children.filter((a) => a.attachment === "energy").length <=
+                    4),
+            )
             .map((a) => (
               <Button
                 variant="ghost"
@@ -597,8 +650,12 @@ export function CombatLogView({
     );
   }
   async function saveCapture() {
-    if (!boardRef.current || busy) return;
+    if (!boardRef.current || busy || captureRunning.current) return;
+    captureRunning.current = true;
+    setCapturing(true);
     setBusy(true);
+    setDownload(null);
+    setToast("Preparing board image…");
     // Start the clipboard promise during the user gesture (required by Safari).
     const blobPromise = captureBoard(boardRef.current);
     try {
@@ -620,6 +677,8 @@ export function CombatLogView({
         );
       }
     } finally {
+      captureRunning.current = false;
+      setCapturing(false);
       setBusy(false);
     }
   }
@@ -656,6 +715,15 @@ export function CombatLogView({
         (c) => c.owner === pile.owner && c.zone === pile.zone && !c.parent,
       )
     : [];
+  const selectedPileCount = Object.values(pileSelection).reduce(
+    (a, b) => a + b,
+    0,
+  );
+  const pileHandCount = pile
+    ? state.cards.filter(
+        (c) => c.owner === pile.owner && c.zone === "hand" && !c.parent,
+      ).length
+    : 0;
   function category(c: TableCard) {
     const type =
       data.cards.find((a) => cardNameKey(a.name) === cardNameKey(c.name ?? ""))
@@ -747,7 +815,12 @@ export function CombatLogView({
             !parsed,
             editing,
           )}
-          {icon("Save boardstate", <Camera />, saveCapture, busy || !parsed)}
+          {icon(
+            "Save boardstate",
+            capturing ? <LoaderCircle className="animate-spin" /> : <Camera />,
+            saveCapture,
+            busy || !parsed,
+          )}
           <Button
             asChild
             size="icon"
@@ -956,7 +1029,16 @@ export function CombatLogView({
                     commit(structuredClone(history[0]));
                     setSelected(null);
                   })}
-                  {icon("Screenshot", <Camera />, saveCapture, busy)}
+                  {icon(
+                    "Screenshot",
+                    capturing ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <Camera />
+                    ),
+                    saveCapture,
+                    busy,
+                  )}
                   {icon("Edit deck lists", <Layers3 />, () =>
                     setSettingUp(true),
                   )}
@@ -1012,50 +1094,55 @@ export function CombatLogView({
               }}
             />
             <div className="study-controls">
-              {icon(
-                "Previous action",
-                <ChevronLeft />,
-                () => {
-                  setPlaying(false);
-                  setStep((s) => s - 1);
-                },
-                editing || step === 0,
-              )}
-              {icon(
-                playing ? "Pause" : "Play",
-                playing ? <Pause /> : <Play />,
-                () => setPlaying((p) => !p),
-                editing || step === events.length - 1,
-              )}
-              {icon(
-                "Next action",
-                <ChevronRight />,
-                () => {
-                  setPlaying(false);
-                  setStep((s) => s + 1);
-                },
-                editing || step === events.length - 1,
-              )}
-              <ChoiceSelect
-                hideLabel
-                label="Replay speed"
-                value={speed}
-                disabled={editing}
-                onChange={setSpeed}
-                options={["0.5", "1", "1.5", "2", "4"].map((s) => ({
-                  value: s,
-                  label: "x" + s,
-                }))}
-              />
-              <span>
-                {step + 1} / {events.length}
-              </span>
+              <div className="study-playback">
+                {icon(
+                  "Previous action",
+                  <ChevronLeft />,
+                  () => {
+                    setPlaying(false);
+                    setStep((s) => s - 1);
+                  },
+                  editing || step === 0,
+                )}
+                {icon(
+                  playing ? "Pause" : "Play",
+                  playing ? <Pause /> : <Play />,
+                  () => setPlaying((p) => !p),
+                  editing || step === events.length - 1,
+                )}
+                {icon(
+                  "Next action",
+                  <ChevronRight />,
+                  () => {
+                    setPlaying(false);
+                    setStep((s) => s + 1);
+                  },
+                  editing || step === events.length - 1,
+                )}
+              </div>
+              <div className="study-controls-meta">
+                <ChoiceSelect
+                  hideLabel
+                  label="Replay speed"
+                  value={speed}
+                  disabled={editing}
+                  onChange={setSpeed}
+                  options={["0.5", "1", "1.5", "2", "4"].map((s) => ({
+                    value: s,
+                    label: "x" + s,
+                  }))}
+                />
+                <span>
+                  {step + 1} / {events.length}
+                </span>
+              </div>
             </div>
           </footer>
         </>
       )}
       {toast && (
         <div className="study-toast" role="status">
+          {capturing && <LoaderCircle className="animate-spin" size={18} />}
           {toast}
           {download && (
             <Button
@@ -1189,17 +1276,100 @@ export function CombatLogView({
                     })
                   : 0,
               )
-              .map((copies) =>
-                card(
-                  copies[0],
-                  false,
-                  false,
-                  pile.zone === "deck" ? copies.length : undefined,
-                ),
-              )}
+              .map((copies) => (
+                <div key={copies[0].id} className="study-pile-copy-group">
+                  {card(
+                    copies[0],
+                    false,
+                    false,
+                    pile.zone === "deck" ? copies.length : undefined,
+                  )}
+                  {editing &&
+                    pile.zone === "deck" &&
+                    (() => {
+                      const key =
+                        copies[0].printing?.tcgdex_id ??
+                        copies[0].name ??
+                        copies[0].id;
+                      const count = pileSelection[key] ?? 0;
+                      return (
+                        <div className="study-pile-quantity">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="rounded-full"
+                            aria-label={"Select fewer " + copies[0].name}
+                            disabled={!count}
+                            onClick={() =>
+                              setPileSelection((s) => ({
+                                ...s,
+                                [key]: count - 1,
+                              }))
+                            }
+                          >
+                            <Minus />
+                          </Button>
+                          <output aria-label={"Selected " + copies[0].name}>
+                            {count}
+                          </output>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="rounded-full"
+                            aria-label={"Select more " + copies[0].name}
+                            disabled={count >= copies.length}
+                            onClick={() =>
+                              setPileSelection((s) => ({
+                                ...s,
+                                [key]: count + 1,
+                              }))
+                            }
+                          >
+                            <Plus />
+                          </Button>
+                        </div>
+                      );
+                    })()}
+                </div>
+              ))}
           </div>
           {pileCards.length === 0 && <p>No cards in this pile.</p>}
-          {editing && selected && (
+          {editing && pile.zone === "deck" && (
+            <p className="field-hint">
+              Hand: {pileHandCount}/25 · Selected: {selectedPileCount}
+              {selectedPileCount + pileHandCount > 25 &&
+                " · Reduce your selection to fit in your hand."}
+            </p>
+          )}
+          {editing && pile.zone === "deck" && (
+            <Button
+              disabled={
+                !selectedPileCount || selectedPileCount + pileHandCount > 25
+              }
+              onClick={() => {
+                const groups = new Map<string, TableCard[]>();
+                for (const c of pileCards) {
+                  const key = c.printing?.tcgdex_id ?? c.name ?? c.id;
+                  groups.set(key, [...(groups.get(key) ?? []), c]);
+                }
+                const ids = [...groups].flatMap(([key, cards]) =>
+                  cards.slice(0, pileSelection[key] ?? 0).map((c) => c.id),
+                );
+                const next = moveTableCardsToHand(state, ids, pile.owner);
+                if (next === state) {
+                  setToast("Your hand can hold up to 25 cards.");
+                  return;
+                }
+                commit(next);
+                setPile(null);
+                setPileSelection({});
+              }}
+            >
+              Move selected cards to hand (
+              {Object.values(pileSelection).reduce((a, b) => a + b, 0)})
+            </Button>
+          )}
+          {editing && pile.zone !== "deck" && selected && (
             <Button
               onClick={() => {
                 move(selected, pile.owner, "hand");
@@ -1209,6 +1379,50 @@ export function CombatLogView({
               Move selected card to hand
             </Button>
           )}
+        </Modal>
+      )}
+      {energyPokemon && (
+        <Modal
+          className="study-pile-modal"
+          title="Attached energies"
+          onClose={() => setEnergyPokemon(null)}
+        >
+          <div className="study-pile-grid">
+            {state.cards
+              .filter(
+                (c) => c.parent === energyPokemon && c.attachment === "energy",
+              )
+              .map((c) => (
+                <div key={c.id} className="study-pile-copy-group">
+                  <ReplayImage
+                    name={c.name ?? undefined}
+                    src={
+                      c.printing?.image_url ??
+                      (c.name ? image(c.name) : undefined)
+                    }
+                  />
+                  {editing && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        state.cards.filter(
+                          (a) =>
+                            a.owner === c.owner &&
+                            a.zone === "hand" &&
+                            !a.parent,
+                        ).length >= 25
+                      }
+                      onClick={() =>
+                        commit(moveTableCard(state, c.id, c.owner, "hand"))
+                      }
+                    >
+                      Return to hand
+                    </Button>
+                  )}
+                </div>
+              ))}
+          </div>
         </Modal>
       )}
       {inspect && (

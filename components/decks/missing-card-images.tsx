@@ -177,10 +177,13 @@ export function MissingCardImages() {
         <p className="eyebrow">SHARED CARD ART</p>
         <h1>Missing images</h1>
         <p>
-          Choose a set to complete its missing card images. Saved images are
-          shared across the app.
+          Current Standard expansions, newest first. Choose a set to complete
+          its missing card images. Saved images are shared across the app.
         </p>
       </div>
+      {sets[0] && (
+        <p className="field-hint">Latest available expansion: {sets[0].name}</p>
+      )}
       <div className="flex gap-3 items-end">
         <ChoiceSelect
           label="Expansion"

@@ -38,6 +38,12 @@ test("administrator catalogue publishing, anonymous paired replay and fixed hand
   await page.getByRole("button", { name: "Login", exact: true }).click();
   await expect(page).toHaveURL(/\/decks$/);
   await page.goto("/pro-tv");
+  await expect(
+    page.getByRole("link", { name: "Pro TV", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Catalogue examples").locator(".pro-tv-card"),
+  ).toHaveCount(3);
   await page.getByRole("button", { name: "Add match", exact: true }).click();
   const form = page.getByRole("dialog", {
     name: "Add Pro TV match",
@@ -211,7 +217,8 @@ test("personal complementary import rejects mismatches and persists a verified s
     .filter({ hasText: "Paired personal fixture" })
     .getByRole("button", { name: /Details/ })
     .click();
-  await page.getByRole("button", { name: "View combat log" }).click();
+  await page.getByRole("button", { name: "Match options" }).first().click();
+  await page.getByRole("menuitem", { name: "Review match" }).click();
   await page.getByRole("button", { name: "Add complementary log" }).click();
   const dialog = page.getByRole("dialog", {
     name: "Complementary combat log",
@@ -236,10 +243,17 @@ test("personal complementary import rejects mismatches and persists a verified s
   );
   await page.getByLabel("Replay action", { exact: true }).fill("8");
   await page.getByRole("button", { name: "Table Top", exact: true }).click();
-  const setup = page.getByRole("dialog", { name: "Prepare Table Top", exact: true });
+  const setup = page.getByRole("dialog", {
+    name: "Prepare Table Top",
+    exact: true,
+  });
   await expect(setup).toBeVisible();
-  await expect(setup.getByRole("button", { name: "Review card allocation" })).toBeDisabled();
-  await setup.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(
+    setup.getByRole("button", { name: "Review card allocation" }),
+  ).toBeDisabled();
+  await setup
+    .getByRole("button", { name: "Close dialog", exact: true })
+    .click();
   await page.getByRole("button", { name: "Close replay", exact: true }).click();
   const deleted = await request.post(`${api}/rpc/delete_entity`, {
     data: { entity: "deck", entity_id: deckId },

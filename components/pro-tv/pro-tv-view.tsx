@@ -187,7 +187,48 @@ export function ProTvView({
       {!matches.length && (
         <div className="empty-state">
           <Tv />
-          <p>No matches available yet.</p>
+          <p>No matches available yet. These examples preview the catalogue.</p>
+        </div>
+      )}
+      {!matches.length && (
+        <div className="pro-tv-grid" aria-label="Catalogue examples">
+          {["Final · Game 1", "Top 8 · Game 2", "Team practice · Game 3"].map(
+            (title, index) => (
+              <article className="pro-tv-card" key={title}>
+                <div className="pro-tv-watch">
+                  <div
+                    className="pro-tv-thumbnail"
+                    style={{
+                      background: [
+                        "linear-gradient(135deg,#173d36,#193347)",
+                        "linear-gradient(135deg,#34315a,#473126)",
+                        "linear-gradient(135deg,#173747,#323c2a)",
+                      ][index],
+                    }}
+                  >
+                    <Tv size={48} />
+                    <span>
+                      <Play size={24} />
+                    </span>
+                  </div>
+                  <div>
+                    <h2>{title}</h2>
+                    <p>Player One vs Player Two</p>
+                    <small>Example · Coming soon</small>
+                    <p>
+                      {
+                        [
+                          "Dragapult ex · Gholdengo ex",
+                          "Mega Lucario ex · Mega Gardevoir ex",
+                          "Hydrapple ex · Dragapult ex",
+                        ][index]
+                      }
+                    </p>
+                  </div>
+                </div>
+              </article>
+            ),
+          )}
         </div>
       )}
       {watch && (

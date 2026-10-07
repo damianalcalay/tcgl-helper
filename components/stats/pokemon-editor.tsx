@@ -8,6 +8,7 @@ import {
   setTableDamage,
   isTableEnergy,
   isTableTool,
+  addTableEnergy,
 } from "@/lib/domain/table-top";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,17 +26,19 @@ export function PokemonEditor({
   commit: (state: TableState) => void;
   image: (name: string) => string | undefined;
 }) {
-  const [source, setSource] = useState("hand"),
+  const [source, setSource] = useState("deck"),
     [returnZone, setReturnZone] = useState("hand"),
     [manual, setManual] = useState(false),
     [damage, setDamage] = useState(""),
     [error, setError] = useState("");
   const own = state.cards.filter((c) => c.owner === pokemon.owner),
     energies = [...new Set(own.filter(isTableEnergy).map((c) => c.name))],
-    tools = [
-      ...new Set(own.filter(isTableTool).map((c) => c.name)),
-    ];
+    tools = [...new Set(own.filter(isTableTool).map((c) => c.name))];
   function add(name: string | null, attachment: "energy" | "tool") {
+    if (attachment === "energy") {
+      commit(addTableEnergy(state, pokemon.id, name, source));
+      return;
+    }
     const c = own.find(
       (a) => a.name === name && a.zone === source && !a.parent,
     );
@@ -171,7 +174,15 @@ export function PokemonEditor({
           label: value,
         }))}
       />
-      <span>Energies</span>
+      <span>
+        Energies (
+        {
+          own.filter(
+            (c) => c.parent === pokemon.id && c.attachment === "energy",
+          ).length
+        }
+        /15)
+      </span>
       {energies.map((name) => {
         const count = own.filter(
           (c) =>
@@ -204,9 +215,9 @@ export function PokemonEditor({
               className="rounded-full"
               aria-label={`Attach ${name}`}
               disabled={
-                !own.some(
-                  (c) => c.name === name && c.zone === source && !c.parent,
-                )
+                own.filter(
+                  (c) => c.parent === pokemon.id && c.attachment === "energy",
+                ).length >= 15
               }
               onClick={() => add(name, "energy")}
             >

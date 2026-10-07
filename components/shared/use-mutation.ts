@@ -1,5 +1,5 @@
 "use client";
-import { useTransition, useState } from "react";
+import { useTransition, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { ActionResult } from "@/app/actions";
 export function useMutation() {
@@ -7,10 +7,13 @@ export function useMutation() {
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const running = useRef(false);
   async function run(
     operation: () => Promise<ActionResult>,
     onSuccess?: (result: Extract<ActionResult, { success: true }>) => void,
   ) {
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     setError("");
     try {
@@ -22,6 +25,7 @@ export function useMutation() {
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
+      running.current = false;
       setBusy(false);
     }
   }

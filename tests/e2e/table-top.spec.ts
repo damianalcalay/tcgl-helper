@@ -150,6 +150,17 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   request,
 }) => {
   await seed(request);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        write: async (items: ClipboardItem[]) => {
+          await items[0].getType("image/png");
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        },
+      },
+    });
+  });
   await page.route("**/api/replay-cards", (route) =>
     route.fulfill({ json: { cards: [] } }),
   );
@@ -163,11 +174,24 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     .filter({ hasText: "Second iteration fixture Ciberbrian" })
     .getByRole("button", { name: /Details/ })
     .click();
-  await page.getByRole("button", { name: "View combat log" }).click();
+  await page.getByRole("button", { name: "Match options" }).first().click();
+  await page.getByRole("menuitem", { name: "Review match" }).click();
   await page.getByLabel("Replay action", { exact: true }).fill("8");
   await expect(
     page.getByRole("button", { name: "View Ciberbrian deck", exact: true }),
   ).toBeDisabled();
+  const timelineBox = await page
+    .locator(".study-timeline > input")
+    .boundingBox();
+  const playbackBox = await page.locator(".study-playback").boundingBox();
+  expect(
+    Math.abs(
+      timelineBox!.x +
+        timelineBox!.width / 2 -
+        playbackBox!.x -
+        playbackBox!.width / 2,
+    ),
+  ).toBeLessThan(2);
   const hand = page.locator(".study-bottom .study-hand .study-card-button");
   await hand.first().click();
   const inspection = page.locator(".study-inspection-modal");
@@ -269,6 +293,45 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   await expect(
     page.getByRole("button", { name: "Tool Bravery Charm", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
+  for (let i = 0; i < 4; i++)
+    await page
+      .getByRole("button", {
+        name: "Attach Basic Fighting Energy",
+        exact: true,
+      })
+      .click();
+  const stack = page.locator(".study-bottom .study-active .study-energy-stack");
+  await expect(stack).toHaveText("5");
+  await expect(
+    page.locator(".study-bottom .study-active .study-attachment"),
+  ).toHaveCount(2);
+  await stack.click();
+  const attached = page.getByRole("dialog", {
+    name: "Attached energies",
+    exact: true,
+  });
+  await expect(
+    attached.getByRole("button", { name: "Return to hand" }),
+  ).toHaveCount(5);
+  await attached
+    .getByRole("button", { name: "Return to hand" })
+    .first()
+    .click();
+  await expect(
+    attached.getByRole("button", { name: "Return to hand" }),
+  ).toHaveCount(4);
+  await attached.press("Escape");
+  await expect(stack).toHaveCount(0);
+  await page.getByRole("button", { name: "Screenshot", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Screenshot", exact: true }),
+  ).toBeDisabled();
+  await expect(page.locator(".study-toast")).toContainText(
+    "Preparing board image",
+  );
+  await expect(page.locator(".study-toast")).toContainText(
+    "Board image copied to clipboard",
+  );
   await page
     .getByRole("button", { name: "Edit deck lists", exact: true })
     .click();
@@ -326,11 +389,17 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     .getByRole("button", { name: "Area Zero Underdepths", exact: true })
     .click();
   await deck
-    .getByRole("button", { name: "Move selected card to hand" })
+    .getByRole("button", {
+      name: "Select more Basic Fighting Energy",
+      exact: true,
+    })
+    .click();
+  await deck
+    .getByRole("button", { name: "Move selected cards to hand (2)" })
     .click();
   await expect(
     page.locator(".study-bottom .study-hand .study-count"),
-  ).toHaveText(String(count + 1));
+  ).toHaveText(String(count + 2));
   await page
     .locator(".study-bottom .study-hand")
     .getByRole("button", { name: "Area Zero Underdepths", exact: true })

@@ -261,7 +261,8 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await page.getByRole("dialog").last().press("Escape");
   await matchRow.press("Enter");
   await expect(matchRow).toHaveAttribute("aria-expanded", "false");
-  await page.getByRole("button", { name: "Edit match", exact: true }).click();
+  await page.getByRole("button", { name: "Match options" }).first().click();
+  await page.getByRole("menuitem", { name: "Edit match", exact: true }).click();
   await page
     .getByRole("button", { name: "Opponent prizes: 6", exact: true })
     .click();
@@ -271,7 +272,10 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await expect(page.getByText("0.0%", { exact: true }).first()).toBeVisible();
   await choose(page, "Entries per page", "All");
   await expect(page.getByText("Showing 1–1 of 1 matches")).toBeVisible();
-  await page.getByRole("button", { name: "Delete match", exact: true }).click();
+  await page.getByRole("button", { name: "Match options" }).first().click();
+  await page
+    .getByRole("menuitem", { name: "Delete match", exact: true })
+    .click();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.locator(".match-row-draw")).toBeVisible();
   await page
@@ -309,10 +313,30 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await page
     .getByRole("button", { name: "Delete Deck Alpha", exact: true })
     .click();
+  const deleteConfirmation = page.getByRole("dialog");
+  await expect(
+    deleteConfirmation.getByRole("button", { name: "Close dialog" }),
+  ).toHaveCount(0);
+  await page.route("**/decks", async (route) => {
+    if (route.request().method() === "POST")
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    await route.continue();
+  });
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Delete", exact: true })
     .click();
+  await expect(
+    deleteConfirmation.getByRole("button", {
+      name: "Please wait…",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await deleteConfirmation.press("Escape");
+  await expect(deleteConfirmation).toBeVisible();
+  await expect(
+    deleteConfirmation.getByRole("button", { name: "Cancel", exact: true }),
+  ).toBeDisabled();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Delete Deck Alpha", exact: true }),
@@ -809,7 +833,8 @@ test("combat log inference, perspective correction, full-screen save and board r
     .filter({ hasText: "Combat fixture deck" })
     .first();
   await row.getByRole("button", { name: /Details/ }).click();
-  await page.getByRole("button", { name: "View combat log" }).click();
+  await page.getByRole("button", { name: "Match options" }).first().click();
+  await page.getByRole("menuitem", { name: "Review match" }).click();
   const replay = page.getByRole("dialog", { name: "Match replay" });
   await expect(replay).toBeVisible();
   await expect(
@@ -863,10 +888,17 @@ test("combat log inference, perspective correction, full-screen save and board r
   await pile.getByRole("button", { name: "Trainers", exact: true }).click();
   await pile.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page.getByRole("button", { name: "Table Top", exact: true }).click();
-  const setup = page.getByRole("dialog", { name: "Prepare Table Top", exact: true });
+  const setup = page.getByRole("dialog", {
+    name: "Prepare Table Top",
+    exact: true,
+  });
   await expect(setup).toBeVisible();
-  await expect(setup.getByRole("button", { name: "Review card allocation" })).toBeDisabled();
-  await setup.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(
+    setup.getByRole("button", { name: "Review card allocation" }),
+  ).toBeDisabled();
+  await setup
+    .getByRole("button", { name: "Close dialog", exact: true })
+    .click();
   await expect(page.getByLabel("Replay action", { exact: true })).toBeEnabled();
   await page
     .getByRole("button", { name: "Save boardstate", exact: true })
