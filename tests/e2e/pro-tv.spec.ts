@@ -219,21 +219,27 @@ test("personal complementary import rejects mismatches and persists a verified s
     .click();
   await page.getByRole("button", { name: "Match options" }).first().click();
   await page.getByRole("menuitem", { name: "Review match" }).click();
-  await page.getByRole("button", { name: "Add complementary log" }).click();
+  await expect(
+    page.getByRole("button", { name: /^Hand visibility:/ }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Add opponent log" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Complementary combat log",
+    name: "Opponent combat log",
     exact: true,
   });
   await dialog
-    .getByLabel("Complementary combat log", { exact: true })
+    .getByLabel("Opponent combat log", { exact: true })
     .fill(secondary.replace("for 240 damage", "for 999 damage"));
   await dialog.getByRole("button", { name: "Verify and save" }).click();
   await expect(dialog.getByRole("alert")).toContainText("does not complement");
   await dialog
-    .getByLabel("Complementary combat log", { exact: true })
+    .getByLabel("Opponent combat log", { exact: true })
     .fill(secondary);
   await dialog.getByRole("button", { name: "Verify and save" }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Hand visibility: you", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("status")).toContainText("verified and saved");
   const read = await request.get(`${api}/matches?id=eq.${matchId}`, {
     headers: { Accept: "application/vnd.pgrst.object+json" },
@@ -242,7 +248,9 @@ test("personal complementary import rejects mismatches and persists a verified s
     secondary.replace(/\r\n/g, "\n"),
   );
   await page.getByLabel("Replay action", { exact: true }).fill("8");
-  await page.getByRole("button", { name: "Table Top", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Enter Table Top", exact: true })
+    .click();
   const setup = page.getByRole("dialog", {
     name: "Prepare Table Top",
     exact: true,

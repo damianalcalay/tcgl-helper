@@ -16,7 +16,6 @@ import {
   LoaderCircle,
   Minus,
   Plus,
-  Upload,
   Undo2,
   Redo2,
   RotateCcw,
@@ -29,7 +28,8 @@ import {
   Eraser,
   X,
   Layers3,
-  ImagePlus,
+  Trash2,
+  BrushCleaning,
 } from "lucide-react";
 import type { AppData, Match, CardType } from "@/types/domain";
 import {
@@ -41,6 +41,8 @@ import { replayBoard } from "@/lib/domain/combat-replay";
 import { printingTera } from "@/lib/domain/card-metadata";
 import {
   handVisible,
+  clearTable,
+  deleteTableCard,
   moveTableCard,
   moveTableCardsToHand,
   fullDeckCards,
@@ -150,17 +152,20 @@ export function CombatLogView({
 }) {
   const { resolvedTheme, setTheme } = useTheme();
   const [secondary, setSecondary] = useState(match.opponent_combat_log ?? "");
+  const complementary = useMemo(
+    () =>
+      secondary ? combineCombatLogs(match.combat_log ?? "", secondary) : null,
+    [match.combat_log, secondary],
+  );
   const parsed = useMemo(() => {
     try {
-      if (secondary) {
-        const result = combineCombatLogs(match.combat_log ?? "", secondary);
-        if (result.status === "matched") return result.log;
-      }
+      if (complementary?.status === "matched") return complementary.log;
       return parseCombatLog(match.combat_log ?? "");
     } catch {
       return null;
     }
-  }, [match.combat_log, secondary]);
+  }, [match.combat_log, complementary]);
+  const verifiedPair = complementary?.status === "matched";
   const own =
     match.log_player || parsed?.perspective || parsed?.players[0] || "";
   const opponent = parsed?.players.find((p) => p !== own) ?? "";
@@ -446,7 +451,7 @@ export function CombatLogView({
     if (editing) {
       const next = moveTableCard(state, id, owner, zone, slot);
       if (next === state) {
-        setToast("Choose a free position on the card owner’s side.");
+        setToast("Choose a free position.");
         return;
       }
       commit(next);
@@ -730,31 +735,34 @@ export function CombatLogView({
               <Layers3 />
             </Button>
           )}
-          <div className="study-discard" {...dropProps(owner, "discard")}>
-            <Button
-              variant="ghost"
-              className="study-pile-hit"
-              aria-label={`View ${owner} discard pile`}
-              onClick={() => openPile(owner, "discard")}
-            >
-              {discard.at(-1) ? (
-                <span data-capture-card>
-                  <ReplayImage
-                    name={discard.at(-1)!.name ?? undefined}
-                    src={
-                      discard.at(-1)!.name
-                        ? image(discard.at(-1)!.name!)
-                        : undefined
-                    }
-                  />
-                </span>
-              ) : (
-                <span className="study-vacant" />
-              )}
-            </Button>
-          </div>
         </div>
         {row(owner, "bench")}
+        <div
+          className={`study-discard ${top ? "study-discard-top" : "study-discard-bottom"}`}
+          {...dropProps(owner, "discard")}
+        >
+          <Button
+            variant="ghost"
+            className="study-pile-hit"
+            aria-label={`View ${owner} discard pile`}
+            onClick={() => openPile(owner, "discard")}
+          >
+            {discard.at(-1) ? (
+              <span data-capture-card>
+                <ReplayImage
+                  name={discard.at(-1)!.name ?? undefined}
+                  src={
+                    discard.at(-1)!.name
+                      ? image(discard.at(-1)!.name!)
+                      : undefined
+                  }
+                />
+              </span>
+            ) : (
+              <span className="study-vacant" />
+            )}
+          </Button>
+        </div>
         <div className="study-field-line">
           <div className="study-prizes" aria-label={`${owner} prizes`}>
             {Array.from({ length: 6 }, (_, slot) => (
@@ -931,8 +939,8 @@ export function CombatLogView({
             {own} · {opponent}
           </span>
           <span>
-            {parsed?.coin?.first === own ? "Start first" : "Start second"} ·{" "}
-            {parsed?.coin?.choice ?? "?"} → {parsed?.coin?.outcome ?? "?"}
+            Chosen coin: {parsed?.coin?.choice ?? "?"} · Coin result:{" "}
+            {parsed?.coin?.outcome ?? "?"}
           </span>
         </div>
         <div className="study-header-controls">
@@ -949,62 +957,57 @@ export function CombatLogView({
               options={CARD_BACKS}
             />
           ))}
-          {icon(
-            `Hand visibility: ${perspective}`,
-            perspective === "both" ? (
-              <ScanEye />
-            ) : perspective === "you" ? (
-              <Eye />
-            ) : (
-              <EyeOff />
-            ),
-            () =>
-              setPerspective((p) =>
-                p === "you" ? "opponent" : p === "opponent" ? "both" : "you",
-              ),
-          )}
-          {icon(
-            "Table Top",
-            <Pencil />,
-            () => {
+          <Button
+            className="study-primary-action"
+            disabled={!parsed}
+            onClick={() => {
               setPlaying(false);
               if (editing) leave();
-              else {
-                setSettingUp(true);
-              }
-            },
-            !parsed,
-            editing,
-          )}
+              else setSettingUp(true);
+            }}
+          >
+            {editing ? "Return to replay" : "Enter Table Top"}
+          </Button>
+          {verifiedPair &&
+            icon(
+              `Hand visibility: ${perspective}`,
+              perspective === "both" ? (
+                <ScanEye />
+              ) : perspective === "you" ? (
+                <Eye />
+              ) : (
+                <EyeOff />
+              ),
+              () =>
+                setPerspective((p) =>
+                  p === "you" ? "opponent" : p === "opponent" ? "both" : "you",
+                ),
+            )}
           {icon(
             "Save boardstate",
             capturing ? <LoaderCircle className="animate-spin" /> : <Camera />,
             saveCapture,
             busy || !parsed,
           )}
-          <Button
-            asChild
-            size="icon"
-            variant="ghost"
-            title="Complete missing card images"
-            aria-label="Complete missing card images"
-          >
-            <a href="/card-images" target="_blank" rel="noreferrer">
-              <ImagePlus />
-            </a>
-          </Button>
-          {!publicMatch &&
-            icon(
-              "Add complementary log",
-              <Upload />,
-              () => {
+          {editing &&
+            icon("Add any card", <Layers3 />, () => {
+              setCreatingError("");
+              setCreatingCard(true);
+            })}
+          {!publicMatch && (
+            <Button
+              className="study-primary-action"
+              disabled={editing}
+              onClick={() => {
                 setPlaying(false);
                 setDraft(secondary);
                 setError("");
                 setImporting(true);
-              },
-              editing,
-            )}
+              }}
+            >
+              Add opponent log
+            </Button>
+          )}
           {icon(
             "Switch replay color theme",
             resolvedTheme === "dark" ? <Sun /> : <Moon />,
@@ -1170,6 +1173,11 @@ export function CombatLogView({
                 <div className="table-tools">
                   {icon("Undo", <Undo2 />, undo, cursor === 0)}
                   {icon("Redo", <Redo2 />, redo, cursor === history.length - 1)}
+                  {icon("Clear table", <BrushCleaning />, () => {
+                    commit(clearTable(state));
+                    setSelected(null);
+                    setSelectedMark(null);
+                  })}
                   {icon("Reset board", <RotateCcw />, () => {
                     commit(structuredClone(history[0]));
                     setSelected(null);
@@ -1189,6 +1197,29 @@ export function CombatLogView({
                   )}
                   {icon("Exit Table Top", <X />, leave)}
                 </div>
+                <div
+                  className="table-trash"
+                  role="region"
+                  aria-label="Delete card drop zone"
+                  onDragOver={(e) => {
+                    if (editing) e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const id = e.dataTransfer.getData("text/plain");
+                    if (state.cards.some((c) => c.id === id)) {
+                      commit(deleteTableCard(state, id));
+                      setSelected(null);
+                    }
+                  }}
+                >
+                  <Trash2 />
+                  <span>Drop to delete</span>
+                </div>
+                <small>
+                  Exit Table Top to return to the paused replay. Changes can be
+                  undone.
+                </small>
                 {chosen && (
                   <div className="table-move">
                     <strong>
@@ -1296,29 +1327,18 @@ export function CombatLogView({
       )}
       {importing && (
         <Modal
-          title="Complementary combat log"
+          title="Opponent combat log"
           onClose={() => setImporting(false)}
           busy={busy}
         >
           <div className="form-stack">
             <textarea
-              aria-label="Complementary combat log"
+              aria-label="Opponent combat log"
+              placeholder="Import your opponent combat log here…"
               rows={12}
               maxLength={200000}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-            />
-            <input
-              type="file"
-              accept=".txt,text/plain"
-              aria-label="Upload complementary log"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  if (file.size > 800000) setError("File too large");
-                  else setDraft(await file.text());
-                }
-              }}
             />
             {error && <p role="alert">{error}</p>}
             <Button
@@ -1424,9 +1444,12 @@ export function CombatLogView({
           board={state}
           players={[own, opponent]}
           onClose={() => setSettingUp(false)}
-          onReady={(next) => {
-            setHistory([next]);
-            setCursor(0);
+          onReady={(next, previous) => {
+            if (editing) commit(next);
+            else {
+              setHistory(previous ? [previous, next] : [next]);
+              setCursor(previous ? 1 : 0);
+            }
             setSelected(null);
             setTool("select");
             setSettingUp(false);

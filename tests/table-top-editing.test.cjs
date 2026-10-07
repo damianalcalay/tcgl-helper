@@ -27,6 +27,9 @@ const {
   setTableDamage,
   prepareTable,
   prepareHypotheticalTable,
+  clearTable,
+  deleteTableCard,
+  replaceTableDeck,
   benchCapacity,
   addTableEnergy,
   moveTableCardsToHand,
@@ -258,7 +261,9 @@ test("batch transfers enforce twenty five hand cards atomically and preserve own
     moveTableCardsToHand(original, ["d1", "d2", "d3"], "you"),
     original,
   );
-  assert.equal(moveTableCardsToHand(original, ["d1", "r"], "you"), original);
+  const mixed = moveTableCardsToHand(original, ["d1", "r"], "you");
+  assert.equal(mixed.cards.find((c) => c.id === "r").owner, "you");
+  assert.equal(mixed.cards.find((c) => c.id === "r").originalOwner, "opponent");
   const next = moveTableCardsToHand(original, ["d1", "d2"], "you");
   assert.equal(
     next.cards.filter((c) => c.owner === "you" && c.zone === "hand").length,
@@ -284,7 +289,7 @@ test("current expansion pool excludes old sets, promos and unreleased tournament
     false,
   );
 });
-test("ownership restrictions reject moving and attaching across both sides without mutating state", () => {
+test("cards move and attach across sides without losing their original deck identity", () => {
   const state = {
     marks: [],
     cards: [
@@ -295,16 +300,67 @@ test("ownership restrictions reject moving and attaching across both sides witho
     ],
   };
   const snapshot = JSON.stringify(state);
-  for (const zone of ["hand", "bench", "active", "deck", "prizes", "discard"])
-    assert.equal(moveTableCard(state, "a", "opponent", zone), state);
-  assert.equal(
-    moveTableCard(state, "e", "you", "active", undefined, "b", "energy"),
+  for (const zone of ["hand", "bench", "active", "deck", "prizes", "discard"]) {
+    const moved = moveTableCard(state, "a", "opponent", zone);
+    assert.equal(moved.cards.find((c) => c.id === "a").owner, "opponent");
+    assert.equal(moved.cards.find((c) => c.id === "a").originalOwner, "you");
+  }
+  const attached = moveTableCard(
     state,
+    "e",
+    "opponent",
+    "active",
+    undefined,
+    "b",
+    "energy",
+  );
+  assert.equal(attached.cards.find((c) => c.id === "e").parent, "b");
+  assert.equal(
+    clearTable(attached).cards.find((c) => c.id === "e").owner,
+    "you",
   );
   assert.equal(
     moveTableCard(state, "i", "you", "active", undefined, "a", "tool"),
     state,
   );
+  assert.equal(JSON.stringify(state), snapshot);
+});
+
+test("clear returns prizes and attachments to original decks; trash removes bundles and replacement clears only the chosen side", () => {
+  const state = {
+    marks: [{ id: "mark" }],
+    cards: [
+      c("p", "you", "active", "A", "basic", { damage: 60 }),
+      c("e", "you", "active", "Energy", "energy_basic", {
+        parent: "p",
+        attachment: "energy",
+      }),
+      c("r", "opponent", "prizes", "B", "basic", { slot: 2 }),
+    ],
+  };
+  const snapshot = JSON.stringify(state);
+  const cleared = clearTable(state);
+  assert(
+    cleared.cards.every(
+      (c) =>
+        c.zone === "deck" &&
+        !c.parent &&
+        c.slot === undefined &&
+        c.damage === 0,
+    ),
+  );
+  assert.equal(cleared.marks.length, 0);
+  assert.equal(deleteTableCard(state, "p").cards.length, 1);
+  const replaced = replaceTableDeck(state, "you", [
+    { id: "new", name: "New Energy", type: "energy_basic", quantity: 60 },
+  ]);
+  assert.equal(replaced.cards.filter((c) => c.owner === "you").length, 60);
+  assert(
+    replaced.cards
+      .filter((c) => c.owner === "you")
+      .every((c) => c.name === "New Energy" && c.zone === "deck"),
+  );
+  assert.equal(replaced.cards.find((c) => c.id === "r").zone, "prizes");
   assert.equal(JSON.stringify(state), snapshot);
 });
 test("tool replacement and energy attachment conserve actual copy identities", () => {

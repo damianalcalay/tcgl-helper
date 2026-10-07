@@ -227,7 +227,9 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   await expect(
     page.getByRole("button", { name: "Replay speed", exact: true }),
   ).toContainText("x2");
-  await page.getByRole("button", { name: "Table Top", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Enter Table Top", exact: true })
+    .click();
   const setup = page.getByRole("dialog", {
     name: "Prepare Table Top",
     exact: true,
@@ -248,6 +250,29 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     page.getByLabel("Replay action", { exact: true }),
   ).toBeDisabled();
   await expect(page.locator(".study-bottom .study-bench-slot")).toHaveCount(5);
+  const frozenCards = await page.locator(".study-board .study-card").count();
+  await page.getByRole("button", { name: "Clear table", exact: true }).click();
+  await expect(page.locator(".study-board .study-card")).toHaveCount(0);
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".study-board .study-card")).toHaveCount(
+    frozenCards,
+  );
+  await page.keyboard.press("Control+y");
+  await expect(page.locator(".study-board .study-card")).toHaveCount(0);
+  await page.keyboard.press("Control+z");
+  const trashCard = page
+    .locator(".study-bottom .study-hand .study-card")
+    .first();
+  await trashCard.dragTo(
+    page.getByRole("region", { name: "Delete card drop zone", exact: true }),
+  );
+  await expect(page.locator(".study-board .study-card")).toHaveCount(
+    frozenCards - 1,
+  );
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".study-board .study-card")).toHaveCount(
+    frozenCards,
+  );
   await expect(
     page.getByLabel("Empty stadium position", { exact: true }),
   ).toBeVisible();
@@ -512,6 +537,9 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     .getByRole("button", { name: "Import", exact: true })
     .click();
   await expect(importModal).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Keep current field", exact: true })
+    .click();
   await editLists
     .getByRole("button", { name: "Edit current deck", exact: true })
     .click();
@@ -592,9 +620,9 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     .dragTo(page.locator(".study-top .study-bench-slot").first());
   await expect(
     page.locator(".study-bottom .study-bench .study-card"),
-  ).toHaveCount(1);
+  ).toHaveCount(0);
   await expect(page.locator(".study-top .study-bench .study-card")).toHaveCount(
-    0,
+    1,
   );
   await page
     .locator(".study-stadium")
@@ -724,6 +752,50 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   await page.keyboard.press("Control+z");
   await expect(page.locator(".table-annotations text")).toHaveCount(1);
   let dialogs = 0;
+  const ownHandBeforeDeckChange = await page
+    .locator(".study-bottom .study-hand .study-card")
+    .count();
+  await page
+    .getByRole("button", { name: "Edit deck lists", exact: true })
+    .click();
+  const replacementSetup = page.getByRole("dialog", {
+    name: "Prepare Table Top",
+    exact: true,
+  });
+  await replacementSetup
+    .getByRole("button", { name: "Import a new TCG list", exact: true })
+    .click();
+  const replacementImport = page.getByRole("dialog", {
+    name: "Import a new TCG list",
+    exact: true,
+  });
+  await replacementImport
+    .getByLabel("TCG Live deck list", { exact: true })
+    .fill("Energy: 60\n60 Basic Water Energy MEE 11");
+  await replacementImport
+    .getByRole("button", { name: "Import", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Clear field and use deck", exact: true })
+    .click();
+  await replacementSetup
+    .getByRole("button", { name: "Enter Table Top", exact: true })
+    .click();
+  await expect(
+    page.locator(".study-bottom .study-hand .study-card"),
+  ).toHaveCount(0);
+  await expect(
+    page.locator(".study-bottom .study-deck .study-count"),
+  ).toHaveText("60");
+  await page.keyboard.press("Control+z");
+  await expect(
+    page.locator(".study-bottom .study-hand .study-card"),
+  ).toHaveCount(ownHandBeforeDeckChange);
+  await page.keyboard.press("Control+y");
+  await expect(
+    page.locator(".study-bottom .study-hand .study-card"),
+  ).toHaveCount(0);
+  await page.keyboard.press("Control+z");
   page.on("dialog", async (d) => {
     dialogs++;
     await d.dismiss();

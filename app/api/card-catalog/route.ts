@@ -11,6 +11,7 @@ import {
   releasedExpansion,
 } from "@/lib/domain/current-expansions";
 import { Script } from "node:vm";
+import { cardNameKey } from "@/lib/domain/combat-log";
 
 type Brief = { id: string; name: string; localId: string };
 let cachedCards: { cards: Brief[]; expires: number } | undefined;
@@ -47,9 +48,20 @@ async function loadStandardCards() {
     for (const s of details)
       if (releasedExpansion(s.releaseDate)) released.add(s.id);
   }
-  return cards.filter((c) =>
+  const unique = new Map<string, Brief>();
+  const candidates = cards.filter((c) =>
     released.has(c.id.slice(0, c.id.lastIndexOf("-"))),
   );
+  // Base printings precede alternate artwork in an expansion's collector numbering.
+  candidates.sort(
+    (a, b) =>
+      Number.parseInt(a.localId, 10) - Number.parseInt(b.localId, 10) ||
+      a.id.localeCompare(b.id),
+  );
+  for (const card of candidates)
+    if (!unique.has(cardNameKey(card.name)))
+      unique.set(cardNameKey(card.name), card);
+  return [...unique.values()];
 }
 
 export async function GET(request: Request) {

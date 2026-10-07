@@ -16,6 +16,7 @@ export interface TableCard {
   id: string;
   name: string | null;
   owner: string;
+  originalOwner?: string;
   zone: Zone;
   slot?: number;
   parent?: string;
@@ -120,7 +121,7 @@ export function moveTableCard(
   attachment?: TableCard["attachment"],
 ): TableState {
   const card = state.cards.find((c) => c.id === id);
-  if (!card || card.owner !== owner) return state;
+  if (!card) return state;
   if (zone === "stadium" && card.type !== "stadium") return state;
   if (zone === "hand" && card.zone !== "hand") {
     const incoming = 1 + state.cards.filter((c) => c.parent === id).length;
@@ -141,7 +142,10 @@ export function moveTableCard(
       .length >= 15
   )
     return state;
-  const cards = state.cards.map((c) => ({ ...c }));
+  const cards = state.cards.map((c) => ({
+    ...c,
+    originalOwner: c.originalOwner ?? c.owner,
+  }));
   const moving = cards.find((c) => c.id === id)!;
   if (
     parent &&
@@ -149,7 +153,7 @@ export function moveTableCard(
       !cards.some(
         (c) =>
           c.id === parent &&
-          c.owner === card.owner &&
+          c.owner === owner &&
           !c.parent &&
           isTablePokemon(c),
       ))
@@ -601,6 +605,56 @@ export function prepareHypotheticalTable(
     }
   }
   return prepareTable({ ...state, cards }, lists);
+}
+export function clearTable(state: TableState, side?: string): TableState {
+  const returning = new Set(
+    state.cards
+      .filter(
+        (c) =>
+          !side || c.owner === side || (c.originalOwner ?? c.owner) === side,
+      )
+      .map((c) => c.id),
+  );
+  return {
+    ...state,
+    marks: side ? state.marks : [],
+    cards: state.cards.map((c) =>
+      returning.has(c.id) || (c.parent && returning.has(c.parent))
+        ? {
+            ...c,
+            owner: c.originalOwner ?? c.owner,
+            zone: "deck",
+            slot: undefined,
+            parent: undefined,
+            attachment: undefined,
+            damage: 0,
+          }
+        : c,
+    ),
+  };
+}
+export function deleteTableCard(state: TableState, id: string): TableState {
+  return {
+    ...state,
+    cards: state.cards.filter((c) => c.id !== id && c.parent !== id),
+  };
+}
+export function replaceTableDeck(
+  state: TableState,
+  owner: string,
+  list: CardOption[],
+): TableState {
+  const cleared = clearTable(state, owner);
+  const next = { ...cleared, deckLists: { ...state.deckLists, [owner]: list } };
+  const kept = cleared.cards.filter(
+    (c) => (c.originalOwner ?? c.owner) !== owner,
+  );
+  const copies = fullDeckCards(next, owner).map((c, i) => ({
+    ...c,
+    id: `replacement-${owner}-${i}`,
+    originalOwner: owner,
+  }));
+  return { ...next, cards: [...kept, ...copies] };
 }
 export function handVisible(
   mode: "you" | "opponent" | "both",

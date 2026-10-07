@@ -905,7 +905,9 @@ test("combat log inference, perspective correction, full-screen save and board r
   ).toBeVisible();
   await pile.getByRole("button", { name: "Trainers", exact: true }).click();
   await pile.getByRole("button", { name: "Close dialog", exact: true }).click();
-  await page.getByRole("button", { name: "Table Top", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Enter Table Top", exact: true })
+    .click();
   const setup = page.getByRole("dialog", {
     name: "Prepare Table Top",
     exact: true,

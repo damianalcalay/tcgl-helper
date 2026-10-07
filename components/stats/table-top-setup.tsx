@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AppData, CardOption, Match } from "@/types/domain";
 import { deckRoster, matchRoster } from "@/lib/domain/logic";
 import { persistedPrintings } from "@/lib/domain/deck-import";
 import {
   prepareHypotheticalTable,
+  replaceTableDeck,
   type TableState,
 } from "@/lib/domain/table-top";
 import { saveDeck, saveDeckVariant } from "@/app/actions";
@@ -28,8 +29,13 @@ export function TableTopSetup({
   board: TableState;
   players: string[];
   onClose: () => void;
-  onReady: (state: TableState) => void;
+  onReady: (state: TableState, previous?: TableState) => void;
 }) {
+  const [base, setBase] = useState(board);
+  const [replacement, setReplacement] = useState<{
+    id: string;
+    rows: CardOption[];
+  } | null>(null);
   const [owner, setOwner] = useState(players[0]),
     [lists, setLists] = useState<Record<string, CardOption[]>>(() =>
       Object.fromEntries(
@@ -55,6 +61,8 @@ export function TableTopSetup({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [editor, setEditor] = useState<"edit" | "import" | null>(null);
+  const initialLists = useRef(lists);
+  const [changedDeck, setChangedDeck] = useState(false);
   function change(rows: CardOption[]) {
     setLists({ ...lists, [owner]: rows });
     setError("");
@@ -155,11 +163,11 @@ export function TableTopSetup({
   const original = savedLists[ids[owner]] ?? deckRoster(data, ids[owner] ?? "");
   const ratio = deckChangeRatio(original, lists[owner] ?? []);
   const total = (lists[owner] ?? []).reduce((sum, c) => sum + c.quantity, 0);
-  const prepared = prepareHypotheticalTable(board, lists);
+  const prepared = prepareHypotheticalTable(base, lists);
   return (
     <Modal
       title="Prepare Table Top"
-      description="Both players need a complete deck. Known replay cards keep their positions."
+      description="Choose both decks. Exit Table Top anytime to return to your paused replay."
       wide
       onClose={onClose}
       busy={busy}
@@ -190,8 +198,11 @@ export function TableTopSetup({
                 : ""),
           }))}
           onChange={(id) => {
-            setIds({ ...ids, [owner]: id });
-            change(savedLists[id] ?? deckRoster(data, id));
+            if (id === ids[owner]) return;
+            setReplacement({
+              id,
+              rows: savedLists[id] ?? deckRoster(data, id),
+            });
           }}
         />
         <div className="flex gap-3 flex-wrap">
@@ -223,7 +234,15 @@ export function TableTopSetup({
         )}
         <Button
           disabled={busy || !prepared.state}
-          onClick={() => onReady(prepared.state!)}
+          onClick={() =>
+            onReady(
+              prepared.state!,
+              changedDeck
+                ? (prepareHypotheticalTable(board, initialLists.current)
+                    .state ?? { ...board, deckLists: initialLists.current })
+                : undefined,
+            )
+          }
         >
           Enter Table Top
         </Button>
@@ -244,7 +263,11 @@ export function TableTopSetup({
             key={owner + editor}
             data={data}
             cards={lists[owner] ?? []}
-            onChange={change}
+            onChange={(rows) =>
+              editor === "import"
+                ? setReplacement({ id: ids[owner], rows })
+                : change(rows)
+            }
             grid
             hideImport={editor === "edit"}
             importOnly={editor === "import"}
@@ -284,6 +307,41 @@ export function TableTopSetup({
               {error && <p role="status">{error}</p>}
             </div>
           )}
+        </Modal>
+      )}
+      {replacement && (
+        <Modal
+          title="Change Table Top deck"
+          description="Keep the current cards or clear this player's field for the new deck. The replay stays unchanged."
+          onClose={() => setReplacement(null)}
+        >
+          <div className="flex flex-wrap gap-3 mt-4">
+            <Button
+              onClick={() => {
+                setBase(replaceTableDeck(base, owner, replacement.rows));
+                setChangedDeck(true);
+                setIds({ ...ids, [owner]: replacement.id });
+                change(replacement.rows);
+                setReplacement(null);
+              }}
+            >
+              Clear field and use deck
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setChangedDeck(true);
+                setIds({ ...ids, [owner]: replacement.id });
+                change(replacement.rows);
+                setReplacement(null);
+              }}
+            >
+              Keep current field
+            </Button>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">
+            You can undo this change after entering Table Top.
+          </p>
         </Modal>
       )}
       {error && <p role="status">{error}</p>}

@@ -9,6 +9,7 @@ function route() {
   const cards = [
     { id: "sv01-1", name: "Old", localId: "1" },
     { id: "sv05-1", name: "Dreepy", localId: "1" },
+    { id: "sv05-201", name: "Dreepy", localId: "201" },
     { id: "sv05-2", name: "Drakloak", localId: "2" },
     { id: "sv06-1", name: "Future", localId: "1" },
     { id: "mee-10", name: "Fire Energy", localId: "10" },
@@ -52,6 +53,8 @@ function route() {
             },
           };
         if (name === "@/lib/card-images") return {};
+        if (name === "@/lib/domain/combat-log")
+          return { cardNameKey: (s) => s.toLowerCase() };
         if (name === "@/lib/domain/current-expansions")
           return {
             currentExpansionId: (id) => ["sv05", "sv06"].includes(id),
