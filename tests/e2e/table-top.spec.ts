@@ -175,7 +175,17 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     .getByRole("button", { name: /Details/ })
     .click();
   await page.getByRole("button", { name: "Match options" }).first().click();
+  expect(
+    await page
+      .getByRole("menu")
+      .evaluate((node) => node.closest("td") === null),
+  ).toBeTruthy();
   await page.getByRole("menuitem", { name: "Review match" }).click();
+  await expect(page.locator("html")).toHaveCSS("overflow", "hidden");
+  const backgroundScroll = await page.evaluate(() => window.scrollY);
+  await page.mouse.move(4, 4);
+  await page.mouse.wheel(0, 900);
+  expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
   await page.getByLabel("Replay action", { exact: true }).fill("8");
   await expect(
     page.getByRole("button", { name: "View Ciberbrian deck", exact: true }),
@@ -200,6 +210,7 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   await expect(inspection.locator(".modal-header")).toHaveCount(0);
   await inspection.press("Escape");
   await expect(inspection).toHaveCount(0);
+  await expect(page.locator("html")).toHaveCSS("overflow", "hidden");
   await page
     .getByRole("button", { name: "View Ciberbrian discard pile" })
     .click();
@@ -253,6 +264,14 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     page.getByRole("button", { name: "Move to player", exact: true }),
   ).toHaveCount(0);
   await page.locator(".study-bottom .study-active .study-card-button").click();
+  await expect(
+    page
+      .locator(".table-toolbar")
+      .getByText("Damage counters", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Move to zone", exact: true }),
+  ).toHaveCount(0);
   await page
     .getByRole("button", { name: "Add 10 damage", exact: true })
     .click();
@@ -470,11 +489,15 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     .locator(".study-bottom .study-hand")
     .getByRole("button", { name: "Area Zero Underdepths", exact: true })
     .click();
-  await choice(page, "Move to zone", "stadium");
   await page
-    .locator(".table-toolbar")
-    .getByRole("button", { name: "Move", exact: true })
-    .click();
+    .locator(".study-bottom .study-hand .study-card")
+    .filter({
+      has: page.getByRole("button", {
+        name: "Area Zero Underdepths",
+        exact: true,
+      }),
+    })
+    .dragTo(page.locator(".study-stadium"));
   await expect(page.locator(".study-top .study-bench-slot")).toHaveCount(8);
   await expect(page.locator(".study-bottom .study-bench-slot")).toHaveCount(5);
   const riolu = page
@@ -500,11 +523,9 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     .locator(".study-stadium")
     .getByRole("button", { name: "Area Zero Underdepths", exact: true })
     .click();
-  await choice(page, "Move to zone", "discard");
   await page
-    .locator(".table-toolbar")
-    .getByRole("button", { name: "Move", exact: true })
-    .click();
+    .locator(".study-stadium .study-card")
+    .dragTo(page.locator(".study-bottom .study-discard"));
   await expect(page.locator(".study-top .study-bench-slot")).toHaveCount(5);
   await page.locator(".study-top .study-active .study-card-button").click();
   await expect(
@@ -566,6 +587,44 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   await page.mouse.move(box!.x + 200, box!.y + 150, { steps: 4 });
   await page.mouse.up();
   await expect(page.locator(".table-annotations [data-mark]")).toHaveCount(1);
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".table-annotations [data-mark]")).toHaveCount(0);
+  await page.keyboard.press("Control+y");
+  await expect(page.locator(".table-annotations [data-mark]")).toHaveCount(1);
+  await page.getByRole("button", { name: "question", exact: true }).click();
+  await choice(page, "Annotation size", "72px");
+  await page.mouse.click(box!.x + 280, box!.y + 220);
+  await expect(page.locator(".table-annotations text")).toHaveAttribute(
+    "font-size",
+    "72",
+  );
+  await page.getByRole("button", { name: "select", exact: true }).click();
+  const questionMark = page
+    .locator(".table-annotations [data-mark]")
+    .filter({ has: page.locator("text") });
+  const originalX = Number(
+    await questionMark.locator("text").getAttribute("x"),
+  );
+  await page.mouse.move(box!.x + 295, box!.y + 190);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + 355, box!.y + 230, { steps: 5 });
+  await page.mouse.up();
+  await expect
+    .poll(async () =>
+      Number(await questionMark.locator("text").getAttribute("x")),
+    )
+    .toBeGreaterThan(originalX + 50);
+  await choice(page, "Annotation size", "96px");
+  await expect(questionMark.locator("text")).toHaveAttribute("font-size", "96");
+  const resize = questionMark.locator("[data-resize]");
+  const handle = await resize.boundingBox();
+  await page.mouse.move(handle!.x + 6, handle!.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(handle!.x + 35, handle!.y + 45, { steps: 5 });
+  await page.mouse.up();
+  expect(
+    Number(await questionMark.locator("text").getAttribute("font-size")),
+  ).toBeGreaterThan(96);
   let dialogs = 0;
   page.on("dialog", async (d) => {
     dialogs++;
@@ -578,6 +637,9 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   await expect(page.locator(".table-annotations [data-mark]")).toHaveCount(0);
   expect(dialogs).toBe(0);
   await page.getByRole("button", { name: "Close replay", exact: true }).click();
+  expect(
+    await page.locator("html").evaluate((node) => node.style.overflow),
+  ).toBe("");
 });
 
 test("missing-image set audit lists missing cards only, keeps failures distinct and supports uploads", async ({

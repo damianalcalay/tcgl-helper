@@ -179,31 +179,33 @@ export function MatchHistory({
                             <MoreVertical />
                           </Button>
                         </Menu.Trigger>
-                        <Menu.Content
-                          align="end"
-                          sideOffset={4}
-                          className="z-50 min-w-[160px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
-                        >
-                          {m.combat_log && (
-                            <DropdownMenuItem
-                              onSelect={() => setCombatMatch(m)}
-                            >
-                              <ScrollText />
-                              Review match
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem onSelect={() => onEdit(m)}>
-                            <Pencil />
-                            Edit match
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onSelect={() => onDelete(m)}
+                        <Menu.Portal>
+                          <Menu.Content
+                            align="end"
+                            sideOffset={4}
+                            className="z-50 min-w-[160px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
                           >
-                            <Trash2 />
-                            Delete match
-                          </DropdownMenuItem>
-                        </Menu.Content>
+                            {m.combat_log && (
+                              <DropdownMenuItem
+                                onSelect={() => setCombatMatch(m)}
+                              >
+                                <ScrollText />
+                                Review match
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onSelect={() => onEdit(m)}>
+                              <Pencil />
+                              Edit match
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onSelect={() => onDelete(m)}
+                            >
+                              <Trash2 />
+                              Delete match
+                            </DropdownMenuItem>
+                          </Menu.Content>
+                        </Menu.Portal>
                       </Menu.Root>
                     </td>
                   </tr>

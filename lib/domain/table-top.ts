@@ -33,6 +33,7 @@ export interface Mark {
   tool: string;
   color: string;
   width: number;
+  size?: number;
   points: { x: number; y: number }[];
 }
 export interface TableState {

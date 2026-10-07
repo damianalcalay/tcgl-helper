@@ -101,6 +101,7 @@ export function PokemonEditor({
   }
   return (
     <div className="pokemon-editor">
+      <span>Damage counters</span>
       <div className="damage-controls">
         <Button
           className="rounded-full"

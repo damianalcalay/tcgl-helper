@@ -122,7 +122,11 @@ export async function captureBoard(board: HTMLElement): Promise<Blob> {
   }
   const svg = board.querySelector<SVGSVGElement>(".table-annotations");
   if (svg) {
-    const source = new XMLSerializer().serializeToString(svg);
+    const clean = svg.cloneNode(true) as SVGSVGElement;
+    clean
+      .querySelectorAll("[data-editor-only]")
+      .forEach((node) => node.remove());
+    const source = new XMLSerializer().serializeToString(clean);
     const img = new Image();
     img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`;
     await img.decode();

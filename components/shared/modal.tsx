@@ -2,6 +2,30 @@
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+let scrollLocks = 0;
+let restoreScroll = () => {};
+function lockPageScroll() {
+  if (scrollLocks++ === 0) {
+    const root = document.documentElement,
+      body = document.body;
+    const rootOverflow = root.style.overflow,
+      bodyOverflow = body.style.overflow,
+      padding = body.style.paddingRight;
+    const gutter = window.innerWidth - root.clientWidth;
+    root.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    if (gutter)
+      body.style.paddingRight = `${parseFloat(getComputedStyle(body).paddingRight) + gutter}px`;
+    restoreScroll = () => {
+      root.style.overflow = rootOverflow;
+      body.style.overflow = bodyOverflow;
+      body.style.paddingRight = padding;
+    };
+  }
+  return () => {
+    if (--scrollLocks === 0) restoreScroll();
+  };
+}
 export function Modal({
   title,
   description,
@@ -29,7 +53,11 @@ export function Modal({
   useEffect(() => {
     const dialog = ref.current;
     dialog?.showModal();
-    return () => dialog?.close();
+    const unlock = lockPageScroll();
+    return () => {
+      dialog?.close();
+      unlock();
+    };
   }, []);
   return (
     <dialog

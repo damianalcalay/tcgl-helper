@@ -62,19 +62,11 @@ import { Modal } from "@/components/shared/modal";
 import { ChoiceSelect } from "@/components/shared/choice-select";
 import { DragScroll } from "@/components/shared/drag-scroll";
 import { TableTopSetup } from "./table-top-setup";
+import { AnnotationLayer } from "./annotation-layer";
+import { markBounds, resizeMark } from "@/lib/domain/annotations";
 import { PokemonEditor } from "./pokemon-editor";
 import { ReplayImage, CARD_BACKS, matchCardImage } from "./combat-log-view";
 
-const zones: Zone[] = [
-  "hand",
-  "deck",
-  "discard",
-  "prizes",
-  "active",
-  "bench",
-  "stadium",
-  "played",
-];
 const colors = [
   "#f97316",
   "#ef4444",
@@ -102,7 +94,12 @@ function MarkShape({ mark }: { mark: Mark }) {
     );
   if (mark.tool === "question")
     return (
-      <text x={a.x} y={a.y} fill={mark.color} fontSize={24 + mark.width * 2}>
+      <text
+        x={a.x}
+        y={a.y}
+        fill={mark.color}
+        fontSize={mark.size ?? 24 + mark.width * 2}
+      >
         ?
       </text>
     );
@@ -186,8 +183,9 @@ export function CombatLogView({
     [parsed, step, reveals],
   );
   const current = editing ? history[cursor] : replay;
-  const [selected, setSelected] = useState<string | null>(null),
-    [destinationZone, setDestinationZone] = useState<Zone>("hand");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedMark, setSelectedMark] = useState<string | null>(null);
+  const [annotationSize, setAnnotationSize] = useState(48);
   const [settingUp, setSettingUp] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [energyPokemon, setEnergyPokemon] = useState<string | null>(null);
@@ -209,8 +207,7 @@ export function CombatLogView({
     [download, setDownload] = useState<Blob | null>(null);
   const [tool, setTool] = useState("select"),
     [color, setColor] = useState(colors[0]),
-    [width, setWidth] = useState(3),
-    [mark, setMark] = useState<Mark | null>(null);
+    [width, setWidth] = useState(3);
   const [boardSize, setBoardSize] = useState({ width: 1000, height: 600 });
   const boardRef = useRef<HTMLDivElement>(null);
   const events = parsed?.events ?? [],
@@ -326,12 +323,55 @@ export function CombatLogView({
     setHistory((h) => [...h.slice(0, cursor + 1), next]);
     setCursor(cursor + 1);
   }
+  function undo() {
+    setCursor((c) => Math.max(0, c - 1));
+    setSelected(null);
+    setSelectedMark(null);
+  }
+  function redo() {
+    setCursor((c) => Math.min(history.length - 1, c + 1));
+    setSelected(null);
+    setSelectedMark(null);
+  }
+  useEffect(() => {
+    if (!editing) return;
+    const handler = (e: KeyboardEvent) => {
+      if (
+        !(e.ctrlKey || e.metaKey) ||
+        e.altKey ||
+        (e.target as Element).closest(
+          "input,textarea,[contenteditable=true],[role=textbox]",
+        )
+      )
+        return;
+      const dialogs = document.querySelectorAll("dialog[open]");
+      if (!dialogs[dialogs.length - 1]?.classList.contains("study-modal"))
+        return;
+      const key = e.key.toLowerCase();
+      if (key === "z") {
+        e.preventDefault();
+        setCursor((c) =>
+          e.shiftKey ? Math.min(history.length - 1, c + 1) : Math.max(0, c - 1),
+        );
+        setSelected(null);
+        setSelectedMark(null);
+      }
+      if (key === "y") {
+        e.preventDefault();
+        setCursor((c) => Math.min(history.length - 1, c + 1));
+        setSelected(null);
+        setSelectedMark(null);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [editing, history.length]);
   function leave() {
     setHistory([]);
     setCursor(0);
     setSelected(null);
     setTool("select");
-    setMark(null);
+    setSelectedMark(null);
     setPile(null);
     return true;
   }
@@ -908,7 +948,15 @@ export function CombatLogView({
             <strong>{event?.text.replace(/^-\s*/, "")}</strong>
           </div>
           <div className="study-stage">
-            <div ref={boardRef} className="study-board" data-editing={editing}>
+            <div
+              ref={boardRef}
+              className="study-board"
+              data-editing={editing}
+              onPointerDown={(e) => {
+                if (!(e.target as Element).closest("[data-mark]"))
+                  setSelectedMark(null);
+              }}
+            >
               {side(opponent, true)}
               {side(own, false)}
               <div
@@ -929,76 +977,22 @@ export function CombatLogView({
                   .filter((c) => c.zone === "played" && !c.parent)
                   .map((c) => card(c))}
               </div>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="table-annotations"
-                viewBox={`0 0 ${boardSize.width} ${boardSize.height}`}
-                width={boardSize.width}
-                height={boardSize.height}
-                style={{
-                  pointerEvents: editing && tool !== "select" ? "auto" : "none",
+              <AnnotationLayer
+                marks={state.marks}
+                editing={editing}
+                tool={tool}
+                color={color}
+                width={width}
+                size={annotationSize}
+                boardSize={boardSize}
+                selected={selectedMark}
+                onSelect={(id) => {
+                  setSelectedMark(id);
+                  if (id) setSelected(null);
                 }}
-                onPointerDown={(e) => {
-                  if (!editing || tool === "select") return;
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const point = {
-                    x: e.clientX - rect.left,
-                    y: e.clientY - rect.top,
-                  };
-                  if (tool === "eraser") {
-                    const target = (e.target as Element).closest("[data-mark]");
-                    if (target)
-                      commit({
-                        ...state,
-                        marks: state.marks.filter(
-                          (m) => m.id !== target.getAttribute("data-mark"),
-                        ),
-                      });
-                    return;
-                  }
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                  setMark({
-                    id: crypto.randomUUID(),
-                    tool,
-                    color,
-                    width,
-                    points: [point],
-                  });
-                }}
-                onPointerMove={(e) => {
-                  if (!mark) return;
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const point = {
-                    x: e.clientX - rect.left,
-                    y: e.clientY - rect.top,
-                  };
-                  setMark((m) =>
-                    m
-                      ? {
-                          ...m,
-                          points:
-                            m.tool === "pencil"
-                              ? [...m.points, point]
-                              : [m.points[0], point],
-                        }
-                      : null,
-                  );
-                }}
-                onPointerUp={() => {
-                  if (mark) {
-                    commit({ ...state, marks: [...state.marks, mark] });
-                    setMark(null);
-                  }
-                }}
-                onPointerCancel={() => setMark(null)}
-              >
-                {state.marks.map((m) => (
-                  <g key={m.id} data-mark={m.id}>
-                    <MarkShape mark={m} />
-                  </g>
-                ))}
-                {mark && <MarkShape mark={mark} />}
-              </svg>
+                onCommit={(marks) => commit({ ...state, marks })}
+                renderMark={(m) => <MarkShape mark={m} />}
+              />
             </div>
             {editing && (
               <aside className="table-toolbar" aria-label="Table Top tools">
@@ -1017,7 +1011,10 @@ export function CombatLogView({
                     return icon(
                       String(name),
                       <ToolIcon />,
-                      () => setTool(String(name)),
+                      () => {
+                        setTool(String(name));
+                        if (name !== "select") setSelectedMark(null);
+                      },
                       false,
                       tool === name,
                     );
@@ -1047,25 +1044,41 @@ export function CombatLogView({
                     label: `${w}px`,
                   }))}
                 />
+                <ChoiceSelect
+                  label="Annotation size"
+                  value={String(annotationSize)}
+                  onChange={(value) => {
+                    const size = Number(value);
+                    setAnnotationSize(size);
+                    const annotation = state.marks.find(
+                      (m) => m.id === selectedMark,
+                    );
+                    if (annotation) {
+                      const b = markBounds(annotation);
+                      const scaled =
+                        annotation.tool === "question"
+                          ? { ...annotation, size }
+                          : resizeMark(
+                              annotation,
+                              (b.width * size) / Math.max(b.width, b.height),
+                              (b.height * size) / Math.max(b.width, b.height),
+                            );
+                      commit({
+                        ...state,
+                        marks: state.marks.map((m) =>
+                          m.id === annotation.id ? scaled : m,
+                        ),
+                      });
+                    }
+                  }}
+                  options={[24, 36, 48, 72, 96, 144].map((size) => ({
+                    value: String(size),
+                    label: size + "px",
+                  }))}
+                />
                 <div className="table-tools">
-                  {icon(
-                    "Undo",
-                    <Undo2 />,
-                    () => {
-                      setCursor((c) => c - 1);
-                      setSelected(null);
-                    },
-                    cursor === 0,
-                  )}
-                  {icon(
-                    "Redo",
-                    <Redo2 />,
-                    () => {
-                      setCursor((c) => c + 1);
-                      setSelected(null);
-                    },
-                    cursor === history.length - 1,
-                  )}
+                  {icon("Undo", <Undo2 />, undo, cursor === 0)}
+                  {icon("Redo", <Redo2 />, redo, cursor === history.length - 1)}
                   {icon("Reset board", <RotateCcw />, () => {
                     commit(structuredClone(history[0]));
                     setSelected(null);
@@ -1093,20 +1106,6 @@ export function CombatLogView({
                         ? "Hidden card"
                         : (chosen.name ?? "Unknown card")}
                     </strong>
-                    <ChoiceSelect
-                      label="Move to zone"
-                      value={destinationZone}
-                      onChange={(z) => setDestinationZone(z as Zone)}
-                      options={zones.map((value) => ({ value, label: value }))}
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        move(chosen.id, chosen.owner, destinationZone)
-                      }
-                    >
-                      Move
-                    </Button>
                     {!chosen.parent && isTablePokemon(chosen) && (
                       <PokemonEditor
                         key={chosen.id}

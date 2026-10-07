@@ -43,6 +43,39 @@ const c = (id, owner, zone, name, type, extra = {}) => ({
   damage: 0,
   ...extra,
 });
+test("annotations translate and resize all stroke points without changing their source; question size preserves its top anchor", () => {
+  const { markBounds, translateMark, resizeMark } = load(
+    "lib/domain/annotations.ts",
+  );
+  const stroke = {
+    id: "pencil",
+    tool: "pencil",
+    color: "red",
+    width: 3,
+    points: [
+      { x: 10, y: 20 },
+      { x: 20, y: 40 },
+      { x: 30, y: 30 },
+    ],
+  };
+  const moved = translateMark(stroke, 40, -10);
+  assert.equal(moved.points[0].x, 50);
+  assert.equal(moved.points[0].y, 10);
+  assert.equal(stroke.points[0].x, 10);
+  const resized = resizeMark(stroke, 40, 60);
+  assert.equal(resized.points[1].x, 30);
+  assert.equal(resized.points[1].y, 80);
+  const question = {
+    ...stroke,
+    tool: "question",
+    size: 48,
+    points: [{ x: 40, y: 100 }],
+  };
+  const before = markBounds(question),
+    after = resizeMark(question, 100, 120);
+  assert.equal(after.size, 100);
+  assert.equal(markBounds(after).y, before.y);
+});
 test("panel energy removal deletes the attachment without moving it to another zone; original deck stays available", () => {
   const state = {
     marks: [],
