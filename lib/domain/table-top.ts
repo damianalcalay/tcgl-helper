@@ -607,6 +607,8 @@ export function prepareHypotheticalTable(
   return prepareTable({ ...state, cards }, lists);
 }
 export function clearTable(state: TableState, side?: string): TableState {
+  if (!state.marks.length && state.cards.every((c) => c.zone === "deck"))
+    return state;
   const returning = new Set(
     state.cards
       .filter(

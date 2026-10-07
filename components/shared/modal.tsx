@@ -34,6 +34,7 @@ export function Modal({
   wide = false,
   busy = false,
   closeOnBackdrop = true,
+  closeOnEscape = true,
   className = "",
   bare = false,
   hideClose = false,
@@ -45,6 +46,7 @@ export function Modal({
   wide?: boolean;
   busy?: boolean;
   closeOnBackdrop?: boolean;
+  closeOnEscape?: boolean;
   className?: string;
   bare?: boolean;
   hideClose?: boolean;
@@ -66,7 +68,7 @@ export function Modal({
       onCancel={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (!busy) onClose();
+        if (!busy && closeOnEscape) onClose();
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget && !busy && closeOnBackdrop) onClose();

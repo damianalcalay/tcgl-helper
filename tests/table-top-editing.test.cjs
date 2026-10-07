@@ -350,6 +350,7 @@ test("clear returns prizes and attachments to original decks; trash removes bund
     ),
   );
   assert.equal(cleared.marks.length, 0);
+  assert.equal(clearTable(cleared), cleared);
   assert.equal(deleteTableCard(state, "p").cards.length, 1);
   const replaced = replaceTableDeck(state, "you", [
     { id: "new", name: "New Energy", type: "energy_basic", quantity: 60 },

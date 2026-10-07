@@ -720,21 +720,6 @@ export function CombatLogView({
       >
         <div className="study-hand-line">
           {row(owner, "hand", !handVisible(perspective, top))}
-          {editing && !top && (
-            <Button
-              className="study-create-card"
-              variant="outline"
-              size="icon"
-              aria-label="Create a card"
-              title="Create a card"
-              onClick={() => {
-                setCreatingError("");
-                setCreatingCard(true);
-              }}
-            >
-              <Layers3 />
-            </Button>
-          )}
         </div>
         {row(owner, "bench")}
         <div
@@ -920,6 +905,7 @@ export function CombatLogView({
   }
   return (
     <Modal
+      closeOnEscape={false}
       title="Match replay"
       className="study-modal"
       wide
@@ -968,6 +954,20 @@ export function CombatLogView({
           >
             {editing ? "Return to replay" : "Enter Table Top"}
           </Button>
+          {!publicMatch && (
+            <Button
+              className="study-primary-action"
+              disabled={editing}
+              onClick={() => {
+                setPlaying(false);
+                setDraft(secondary);
+                setError("");
+                setImporting(true);
+              }}
+            >
+              Add opponent log
+            </Button>
+          )}
           {verifiedPair &&
             icon(
               `Hand visibility: ${perspective}`,
@@ -994,20 +994,6 @@ export function CombatLogView({
               setCreatingError("");
               setCreatingCard(true);
             })}
-          {!publicMatch && (
-            <Button
-              className="study-primary-action"
-              disabled={editing}
-              onClick={() => {
-                setPlaying(false);
-                setDraft(secondary);
-                setError("");
-                setImporting(true);
-              }}
-            >
-              Add opponent log
-            </Button>
-          )}
           {icon(
             "Switch replay color theme",
             resolvedTheme === "dark" ? <Sun /> : <Moon />,
@@ -1071,6 +1057,27 @@ export function CombatLogView({
                   .filter((c) => c.zone === "played" && !c.parent)
                   .map((c) => card(c))}
               </div>
+              {editing && (
+                <div
+                  className="table-trash"
+                  role="region"
+                  aria-label="Delete card drop zone"
+                  onDragOver={(e) => {
+                    if (editing) e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const id = e.dataTransfer.getData("text/plain");
+                    if (state.cards.some((c) => c.id === id)) {
+                      commit(deleteTableCard(state, id));
+                      setSelected(null);
+                    }
+                  }}
+                >
+                  <Trash2 />
+                  <span>Drop to delete</span>
+                </div>
+              )}
               <AnnotationLayer
                 marks={state.marks}
                 editing={editing}
@@ -1174,7 +1181,9 @@ export function CombatLogView({
                   {icon("Undo", <Undo2 />, undo, cursor === 0)}
                   {icon("Redo", <Redo2 />, redo, cursor === history.length - 1)}
                   {icon("Clear table", <BrushCleaning />, () => {
-                    commit(clearTable(state));
+                    const cleared = clearTable(state);
+                    if (cleared === state) return;
+                    commit(cleared);
                     setSelected(null);
                     setSelectedMark(null);
                   })}
@@ -1195,31 +1204,7 @@ export function CombatLogView({
                   {icon("Edit deck lists", <Layers3 />, () =>
                     setSettingUp(true),
                   )}
-                  {icon("Exit Table Top", <X />, leave)}
                 </div>
-                <div
-                  className="table-trash"
-                  role="region"
-                  aria-label="Delete card drop zone"
-                  onDragOver={(e) => {
-                    if (editing) e.preventDefault();
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const id = e.dataTransfer.getData("text/plain");
-                    if (state.cards.some((c) => c.id === id)) {
-                      commit(deleteTableCard(state, id));
-                      setSelected(null);
-                    }
-                  }}
-                >
-                  <Trash2 />
-                  <span>Drop to delete</span>
-                </div>
-                <small>
-                  Exit Table Top to return to the paused replay. Changes can be
-                  undone.
-                </small>
                 {chosen && (
                   <div className="table-move">
                     <strong>

@@ -91,7 +91,7 @@ export function CardSearch({
                     setOpen(false);
                   }}
                 >
-                  {c.name} · {c.id}
+                  {c.name}
                 </Button>
               ))}
               {!cards.length && <small>No matching cards.</small>}

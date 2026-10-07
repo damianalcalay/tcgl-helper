@@ -222,7 +222,7 @@ export function TableTopSetup({
           ))}
         </div>
         {!prepared.state && (
-          <p role="alert">
+          <p role="alert" className="table-setup-warning">
             {prepared.errors
               .map((e) =>
                 e

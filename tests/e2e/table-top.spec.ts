@@ -250,9 +250,22 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     page.getByLabel("Replay action", { exact: true }),
   ).toBeDisabled();
   await expect(page.locator(".study-bottom .study-bench-slot")).toHaveCount(5);
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByLabel("Replay action", { exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page
+      .locator(".table-toolbar")
+      .getByRole("button", { name: "Exit Table Top", exact: true }),
+  ).toHaveCount(0);
   const frozenCards = await page.locator(".study-board .study-card").count();
   await page.getByRole("button", { name: "Clear table", exact: true }).click();
   await expect(page.locator(".study-board .study-card")).toHaveCount(0);
+  for (let i = 0; i < 10; i++)
+    await page
+      .getByRole("button", { name: "Clear table", exact: true })
+      .click();
   await page.keyboard.press("Control+z");
   await expect(page.locator(".study-board .study-card")).toHaveCount(
     frozenCards,
@@ -396,9 +409,7 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
         exact: true,
       })
       .click();
-  await page
-    .getByRole("button", { name: "Create a card", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Add any card", exact: true }).click();
   await page
     .getByRole("button", { name: "Create from your full deck", exact: true })
     .click();
@@ -801,7 +812,7 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     await d.dismiss();
   });
   await page
-    .getByRole("button", { name: "Exit Table Top", exact: true })
+    .getByRole("button", { name: "Return to replay", exact: true })
     .click();
   await expect(page.getByLabel("Replay action", { exact: true })).toBeEnabled();
   await expect(page.locator(".table-annotations [data-mark]")).toHaveCount(0);
