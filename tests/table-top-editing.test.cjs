@@ -29,6 +29,9 @@ const {
   benchCapacity,
   addTableEnergy,
   moveTableCardsToHand,
+  removeTableEnergy,
+  fullDeckCards,
+  cloneDeckCardsToHand,
 } = load("lib/domain/table-top.ts");
 const { teraMetadata, printingTera } = load("lib/domain/card-metadata.ts");
 const c = (id, owner, zone, name, type, extra = {}) => ({
@@ -39,6 +42,64 @@ const c = (id, owner, zone, name, type, extra = {}) => ({
   type,
   damage: 0,
   ...extra,
+});
+test("panel energy removal deletes the attachment without moving it to another zone; original deck stays available", () => {
+  const state = {
+    marks: [],
+    cards: [
+      c("p", "you", "active", "P", "basic"),
+      c("e", "you", "active", "Energy", "energy_basic", {
+        parent: "p",
+        attachment: "energy",
+      }),
+    ],
+    deckLists: {
+      you: [
+        { id: "energy", name: "Energy", type: "energy_basic", quantity: 1 },
+      ],
+    },
+  };
+  const next = removeTableEnergy(state, "e");
+  assert.equal(next.cards.length, 1);
+  assert.equal(next.cards.filter((c) => c.zone === "hand").length, 0);
+  assert.equal(fullDeckCards(next, "you").length, 1);
+  assert.equal(
+    addTableEnergy(next, "p", "Energy").cards.filter((c) => c.parent === "p")
+      .length,
+    1,
+  );
+  assert.equal(removeTableEnergy(state, "p"), state);
+});
+test("Full deck copies cards independently of their current location and respects owner and hand capacity", () => {
+  const state = {
+    marks: [],
+    cards: [c("p", "you", "active", "P", "basic")],
+    deckLists: { you: [{ id: "p", name: "P", type: "basic", quantity: 1 }] },
+  };
+  const template = fullDeckCards(state, "you")[0];
+  const next = cloneDeckCardsToHand(state, [template.id], "you");
+  assert.equal(next.cards.find((c) => c.id === "p").zone, "active");
+  assert.equal(next.cards.filter((c) => c.zone === "hand").length, 1);
+  assert.equal(next.cards[1].cloned, true);
+  assert.equal(cloneDeckCardsToHand(state, [template.id], "opponent"), state);
+  assert.equal(
+    cloneDeckCardsToHand(state, Array(26).fill(template.id), "you"),
+    state,
+  );
+});
+test("stadium zone rejects every non-stadium card and still replaces the previous owner's stadium", () => {
+  const state = {
+    marks: [],
+    cards: [
+      c("p", "you", "hand", "P", "basic"),
+      c("s", "you", "hand", "New stadium", "stadium"),
+      c("old", "opponent", "stadium", "Old stadium", "stadium"),
+    ],
+  };
+  assert.equal(moveTableCard(state, "p", "you", "stadium"), state);
+  const next = moveTableCard(state, "s", "you", "stadium");
+  assert.equal(next.cards.find((c) => c.id === "old").zone, "discard");
+  assert.equal(next.cards.find((c) => c.id === "old").owner, "opponent");
 });
 test("hypothetical energies use the deck then clone only owned energy types up to fifteen", () => {
   const original = {

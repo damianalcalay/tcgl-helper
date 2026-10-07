@@ -9,6 +9,8 @@ import {
   isTableEnergy,
   isTableTool,
   addTableEnergy,
+  removeTableEnergy,
+  fullDeckCards,
 } from "@/lib/domain/table-top";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,8 +34,20 @@ export function PokemonEditor({
     [damage, setDamage] = useState(""),
     [error, setError] = useState("");
   const own = state.cards.filter((c) => c.owner === pokemon.owner),
-    energies = [...new Set(own.filter(isTableEnergy).map((c) => c.name))],
-    tools = [...new Set(own.filter(isTableTool).map((c) => c.name))];
+    energies = [
+      ...new Set(
+        [...own, ...fullDeckCards(state, pokemon.owner)]
+          .filter(isTableEnergy)
+          .map((c) => c.name),
+      ),
+    ],
+    tools = [
+      ...new Set(
+        [...own, ...fullDeckCards(state, pokemon.owner)]
+          .filter(isTableTool)
+          .map((c) => c.name),
+      ),
+    ];
   function add(name: string | null, attachment: "energy" | "tool") {
     if (attachment === "energy") {
       commit(addTableEnergy(state, pokemon.id, name, source));
@@ -75,12 +89,14 @@ export function PokemonEditor({
     );
     if (c)
       commit(
-        moveTableCard(
-          state,
-          c.id,
-          pokemon.owner,
-          returnZone as "hand" | "deck" | "discard",
-        ),
+        attachment === "energy"
+          ? removeTableEnergy(state, c.id)
+          : moveTableCard(
+              state,
+              c.id,
+              pokemon.owner,
+              returnZone as "hand" | "deck" | "discard",
+            ),
       );
   }
   return (
@@ -162,18 +178,20 @@ export function PokemonEditor({
         onChange={setSource}
         options={["hand", "deck", "discard"].map((value) => ({
           value,
-          label: value,
+          label: value[0].toUpperCase() + value.slice(1),
         }))}
       />
-      <ChoiceSelect
-        label="Return attachments to"
-        value={returnZone}
-        onChange={setReturnZone}
-        options={["hand", "deck", "discard"].map((value) => ({
-          value,
-          label: value,
-        }))}
-      />
+      {tools.length > 0 && (
+        <ChoiceSelect
+          label="Return attachments to"
+          value={returnZone}
+          onChange={setReturnZone}
+          options={["hand", "deck", "discard"].map((value) => ({
+            value,
+            label: value[0].toUpperCase() + value.slice(1),
+          }))}
+        />
+      )}
       <span>
         Energies (
         {
@@ -226,42 +244,46 @@ export function PokemonEditor({
           </div>
         );
       })}
-      <span>Tools</span>
-      <div className="tool-choices">
-        {tools.map((name) => {
-          const attached = own.some(
-            (c) =>
-              c.name === name &&
-              c.parent === pokemon.id &&
-              c.attachment === "tool",
-          );
-          return (
-            <Button
-              key={name}
-              size="icon"
-              variant="outline"
-              className="attachment-art"
-              title={name ?? "Tool"}
-              aria-label={`Tool ${name}`}
-              aria-pressed={attached}
-              disabled={
-                !attached &&
-                !own.some(
-                  (c) => c.name === name && c.zone === source && !c.parent,
-                )
-              }
-              onClick={() =>
-                attached ? remove(name, "tool") : add(name, "tool")
-              }
-            >
-              <ReplayImage
-                name={name ?? undefined}
-                src={name ? image(name) : undefined}
-              />
-            </Button>
-          );
-        })}
-      </div>
+      {tools.length > 0 && (
+        <>
+          <span>Tools</span>
+          <div className="tool-choices">
+            {tools.map((name) => {
+              const attached = own.some(
+                (c) =>
+                  c.name === name &&
+                  c.parent === pokemon.id &&
+                  c.attachment === "tool",
+              );
+              return (
+                <Button
+                  key={name}
+                  size="icon"
+                  variant="outline"
+                  className="attachment-art"
+                  title={name ?? "Tool"}
+                  aria-label={`Tool ${name}`}
+                  aria-pressed={attached}
+                  disabled={
+                    !attached &&
+                    !own.some(
+                      (c) => c.name === name && c.zone === source && !c.parent,
+                    )
+                  }
+                  onClick={() =>
+                    attached ? remove(name, "tool") : add(name, "tool")
+                  }
+                >
+                  <ReplayImage
+                    name={name ?? undefined}
+                    src={name ? image(name) : undefined}
+                  />
+                </Button>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }

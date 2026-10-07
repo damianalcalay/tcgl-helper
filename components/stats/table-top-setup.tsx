@@ -228,7 +228,7 @@ export function TableTopSetup({
             const count = base.cards.filter(
               (c) => c.owner === p && !c.cloned,
             ).length;
-            return count !== 60 ? (
+            return count !== 60 && !base.deckLists ? (
               <div key={p} role="alert">
                 <p>
                   {p}: replay has {count} copies. Keep all known cards and

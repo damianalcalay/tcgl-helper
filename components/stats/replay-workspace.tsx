@@ -43,6 +43,10 @@ import {
   handVisible,
   moveTableCard,
   moveTableCardsToHand,
+  fullDeckCards,
+  cloneDeckCardsToHand,
+  isTableEnergy,
+  isTableTool,
   tableFromReplay,
   benchCapacity,
   isTablePokemon,
@@ -361,6 +365,37 @@ export function CombatLogView({
         key={c.id}
         className={`study-card ${small ? "study-small" : ""} ${selected === c.id ? "study-selected" : ""}`}
         draggable={editing && tool === "select"}
+        onDragOver={(e) => {
+          if (editing && tool === "select" && isTablePokemon(c) && !c.parent)
+            e.preventDefault();
+        }}
+        onDrop={(e) => {
+          if (!editing || tool !== "select" || !isTablePokemon(c) || c.parent)
+            return;
+          const source = state.cards.find(
+            (a) => a.id === e.dataTransfer.getData("text/plain"),
+          );
+          if (!source || (!isTableEnergy(source) && !isTableTool(source)))
+            return;
+          e.preventDefault();
+          e.stopPropagation();
+          const next = moveTableCard(
+            state,
+            source.id,
+            c.owner,
+            c.zone,
+            undefined,
+            c.id,
+            isTableEnergy(source) ? "energy" : "tool",
+          );
+          if (next !== state) {
+            commit(next);
+            setSelected(c.id);
+          } else
+            setToast(
+              "Attach to a Pokémon on the same side (maximum 15 energies).",
+            );
+        }}
         onDragStart={(e) => {
           e.dataTransfer.setData("text/plain", c.id);
           setSelected(c.id);
@@ -375,7 +410,11 @@ export function CombatLogView({
             setPlaying(false);
             if (editing && pile?.zone === "deck" && c.zone === "deck") {
               const key = c.printing?.tcgdex_id ?? c.name ?? c.id;
-              const max = state.cards.filter(
+              const max = (
+                filter === "Full deck"
+                  ? fullDeckCards(state, c.owner)
+                  : state.cards
+              ).filter(
                 (a) =>
                   !a.parent &&
                   a.owner === c.owner &&
@@ -711,9 +750,11 @@ export function CombatLogView({
       : undefined;
   const picked = reveals[step] ?? [];
   const pileCards = pile
-    ? state.cards.filter(
-        (c) => c.owner === pile.owner && c.zone === pile.zone && !c.parent,
-      )
+    ? filter === "Full deck" && pile.zone === "deck"
+      ? fullDeckCards(state, pile.owner)
+      : state.cards.filter(
+          (c) => c.owner === pile.owner && c.zone === pile.zone && !c.parent,
+        )
     : [];
   const selectedPileCount = Object.values(pileSelection).reduce(
     (a, b) => a + b,
@@ -1240,11 +1281,20 @@ export function CombatLogView({
           onClose={() => setPile(null)}
         >
           <div className="study-filters" role="group" aria-label="Card filters">
-            {["All", "Pokémon", "Trainers", "Energy"].map((f) => (
+            {[
+              "All",
+              "Pokémon",
+              "Trainers",
+              "Energy",
+              ...(editing && pile.zone === "deck" ? ["Full deck"] : []),
+            ].map((f) => (
               <Button
                 key={f}
                 variant={filter === f ? "default" : "ghost"}
-                onClick={() => setFilter(f)}
+                onClick={() => {
+                  setFilter(f);
+                  setPileSelection({});
+                }}
               >
                 {f}
               </Button>
@@ -1253,7 +1303,12 @@ export function CombatLogView({
           <div className="study-pile-grid">
             {Object.values(
               pileCards
-                .filter((c) => filter === "All" || category(c) === filter)
+                .filter(
+                  (c) =>
+                    filter === "All" ||
+                    filter === "Full deck" ||
+                    category(c) === filter,
+                )
                 .reduce<Record<string, TableCard[]>>((groups, c) => {
                   const key =
                     pile.zone === "deck"
@@ -1355,7 +1410,10 @@ export function CombatLogView({
                 const ids = [...groups].flatMap(([key, cards]) =>
                   cards.slice(0, pileSelection[key] ?? 0).map((c) => c.id),
                 );
-                const next = moveTableCardsToHand(state, ids, pile.owner);
+                const next =
+                  filter === "Full deck"
+                    ? cloneDeckCardsToHand(state, ids, pile.owner)
+                    : moveTableCardsToHand(state, ids, pile.owner);
                 if (next === state) {
                   setToast("Your hand can hold up to 25 cards.");
                   return;
@@ -1365,7 +1423,9 @@ export function CombatLogView({
                 setPileSelection({});
               }}
             >
-              Move selected cards to hand (
+              {filter === "Full deck"
+                ? "Copy selected cards to hand ("
+                : "Move selected cards to hand ("}
               {Object.values(pileSelection).reduce((a, b) => a + b, 0)})
             </Button>
           )}

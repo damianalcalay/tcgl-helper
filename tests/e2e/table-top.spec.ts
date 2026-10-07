@@ -271,7 +271,7 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   await expect(
     page.getByRole("button", { name: "Add 10 damage", exact: true }),
   ).toBeDisabled();
-  await choice(page, "Attach from", "deck");
+  await choice(page, "Attach from", "Deck");
   await page
     .getByRole("button", { name: "Attach Basic Fighting Energy", exact: true })
     .click();
@@ -322,6 +322,72 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   ).toHaveCount(4);
   await attached.press("Escape");
   await expect(stack).toHaveCount(0);
+  const handBeforeRemoval = await page
+    .locator(".study-bottom .study-hand .study-count")
+    .innerText();
+  await page
+    .getByRole("button", { name: "Remove Basic Fighting Energy", exact: true })
+    .click();
+  await expect(
+    page.locator(".study-bottom .study-hand .study-count"),
+  ).toHaveText(handBeforeRemoval);
+  for (let i = 0; i < 7; i++)
+    await page
+      .getByRole("button", {
+        name: "Attach Basic Fighting Energy",
+        exact: true,
+      })
+      .click();
+  await expect(stack).toHaveText("10");
+  expect(
+    await stack
+      .locator("span")
+      .evaluate((node) => node.scrollWidth <= node.clientWidth),
+  ).toBeTruthy();
+  await page.screenshot({ path: "test-results/table-top-ten-energies.png" });
+  for (let i = 0; i < 6; i++)
+    await page
+      .getByRole("button", {
+        name: "Remove Basic Fighting Energy",
+        exact: true,
+      })
+      .click();
+  await page
+    .getByRole("button", { name: "View Ciberbrian deck", exact: true })
+    .click();
+  const fullDeck = page.getByRole("dialog", { name: "Deck", exact: true });
+  await expect(fullDeck.locator(".study-filters button").last()).toHaveText(
+    "Full deck",
+  );
+  await fullDeck
+    .getByRole("button", { name: "Full deck", exact: true })
+    .click();
+  await fullDeck.getByRole("button", { name: "Solrock", exact: true }).click();
+  await fullDeck
+    .getByRole("button", { name: "Basic Fighting Energy", exact: true })
+    .click();
+  await fullDeck
+    .getByRole("button", {
+      name: "Copy selected cards to hand (2)",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.locator(".study-bottom .study-active .study-card-button"),
+  ).toHaveAccessibleName("Solrock");
+  const energyInHand = page
+    .locator(".study-bottom .study-hand .study-card")
+    .filter({
+      has: page.getByRole("button", {
+        name: "Basic Fighting Energy",
+        exact: true,
+      }),
+    })
+    .last();
+  await energyInHand.dragTo(
+    page.locator(".study-bottom .study-active .study-card-button"),
+  );
+  await expect(stack).toHaveText("5");
   await page.getByRole("button", { name: "Screenshot", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Screenshot", exact: true }),
@@ -440,6 +506,59 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
     .getByRole("button", { name: "Move", exact: true })
     .click();
   await expect(page.locator(".study-top .study-bench-slot")).toHaveCount(5);
+  await page.locator(".study-top .study-active .study-card-button").click();
+  await expect(
+    page.locator(".table-toolbar").getByText("Tools", { exact: true }),
+  ).toHaveCount(0);
+  const currentHand = Number(
+    await page.locator(".study-bottom .study-hand .study-count").innerText(),
+  );
+  await page
+    .getByRole("button", { name: "View Ciberbrian deck", exact: true })
+    .click();
+  const allCards = page.getByRole("dialog", { name: "Deck", exact: true });
+  await allCards
+    .getByRole("button", { name: "Full deck", exact: true })
+    .click();
+  for (let i = currentHand; i < 25; i++)
+    await allCards
+      .getByRole("button", {
+        name: "Select more Basic Fighting Energy",
+        exact: true,
+      })
+      .click();
+  await allCards
+    .getByRole("button", { name: /^Copy selected cards to hand/ })
+    .click();
+  const scrollingHand = page.locator(".study-bottom .study-hand");
+  await expect(scrollingHand.locator(".study-count")).toHaveText("25");
+  await scrollingHand
+    .getByRole("button", { name: "Scroll cards right", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      scrollingHand.locator(".drag-scroll").evaluate((node) => node.scrollLeft),
+    )
+    .toBeGreaterThan(0);
+  await scrollingHand
+    .getByRole("button", { name: "Scroll cards left", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      scrollingHand.locator(".drag-scroll").evaluate((node) => node.scrollLeft),
+    )
+    .toBe(0);
+  await scrollingHand
+    .locator(".study-card")
+    .filter({
+      has: page.getByRole("button", {
+        name: "Basic Fighting Energy",
+        exact: true,
+      }),
+    })
+    .first()
+    .dragTo(page.locator(".study-stadium"));
+  await expect(page.locator(".study-stadium .study-card")).toHaveCount(0);
   await page.getByRole("button", { name: "pencil", exact: true }).click();
   const box = await page.locator(".study-board").boundingBox();
   await page.mouse.move(box!.x + 100, box!.y + 100);

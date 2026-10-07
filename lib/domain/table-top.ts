@@ -38,6 +38,7 @@ export interface Mark {
 export interface TableState {
   cards: TableCard[];
   marks: Mark[];
+  deckLists?: Record<string, CardOption[]>;
 }
 export function tableFromReplay(board: ReplayBoard): TableState {
   const cards: TableCard[] = [];
@@ -119,6 +120,7 @@ export function moveTableCard(
 ): TableState {
   const card = state.cards.find((c) => c.id === id);
   if (!card || card.owner !== owner) return state;
+  if (zone === "stadium" && card.type !== "stadium") return state;
   if (zone === "hand" && card.zone !== "hand") {
     const incoming = 1 + state.cards.filter((c) => c.parent === id).length;
     if (
@@ -300,7 +302,10 @@ export function addTableEnergy(
       pokemonId,
       "energy",
     );
-  const template = state.cards.find(
+  const template = [
+    ...state.cards,
+    ...fullDeckCards(state, pokemon.owner),
+  ].find(
     (c) => c.owner === pokemon.owner && c.name === name && isTableEnergy(c),
   );
   if (!template) return state;
@@ -338,6 +343,64 @@ export function moveTableCardsToHand(
     next = moved;
   }
   return next;
+}
+export function removeTableEnergy(state: TableState, id: string): TableState {
+  const card = state.cards.find(
+    (c) => c.id === id && c.parent && c.attachment === "energy",
+  );
+  return card
+    ? { ...state, cards: state.cards.filter((c) => c.id !== id) }
+    : state;
+}
+/** Original list stays independent of movements, removals and hypothetical copies. */
+export function fullDeckCards(state: TableState, owner: string): TableCard[] {
+  return (state.deckLists?.[owner] ?? []).flatMap((c, index) => {
+    const printings = (c.printings ?? []).flatMap((p) =>
+      Array.from({ length: p.quantity }, () => p),
+    );
+    return Array.from({ length: c.quantity }, (_, copy) => ({
+      id: `full-${owner}-${index}-${copy}`,
+      name: c.name,
+      owner,
+      zone: "deck" as const,
+      damage: 0,
+      type: c.type,
+      printing: printings[copy],
+      tera: printingTera(printings[copy]),
+      tool: printings[copy]?.tool,
+    }));
+  });
+}
+export function cloneDeckCardsToHand(
+  state: TableState,
+  ids: string[],
+  owner: string,
+): TableState {
+  const library = fullDeckCards(state, owner);
+  const selected = ids.map((id) => library.find((c) => c.id === id));
+  if (
+    !ids.length ||
+    selected.some((c) => !c) ||
+    state.cards.filter(
+      (c) => c.owner === owner && c.zone === "hand" && !c.parent,
+    ).length +
+      ids.length >
+      25
+  )
+    return state;
+  let sequence = state.cards.length;
+  const copies = selected.map((c) => {
+    while (state.cards.some((a) => a.id === `deck-clone-${sequence}`))
+      sequence++;
+    return {
+      ...c!,
+      id: `deck-clone-${sequence++}`,
+      zone: "hand" as const,
+      cloned: true,
+      hypothetical: true,
+    };
+  });
+  return { ...state, cards: [...state.cards, ...copies] };
 }
 export function setTableDamage(
   state: TableState,
@@ -436,7 +499,7 @@ export function prepareTable(
       return copies.slice(0, c.quantity);
     });
     const owned = cards.filter((c) => c.owner === owner && !c.cloned);
-    if (owned.length !== 60)
+    if (owned.length !== 60 && !state.deckLists)
       errors.push(
         `${owner}: the replay reconstructs ${owned.length} copies, but the deck has 60. Correct the replay allocation before editing.`,
       );
@@ -459,7 +522,24 @@ export function prepareTable(
   }
   if (!Object.keys(lists).length || cards.some((c) => !lists[c.owner]))
     errors.push("Both players need a deck.");
-  return errors.length ? { errors } : { errors, state: { ...state, cards } };
+  return errors.length
+    ? { errors }
+    : {
+        errors,
+        state: {
+          ...state,
+          cards,
+          deckLists: Object.fromEntries(
+            Object.entries(lists).map(([owner, list]) => [
+              owner,
+              list.map((c) => ({
+                ...c,
+                printings: c.printings?.map((p) => ({ ...p })),
+              })),
+            ]),
+          ),
+        },
+      };
 }
 export function handVisible(
   mode: "you" | "opponent" | "both",
