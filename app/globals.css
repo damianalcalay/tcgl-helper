@@ -369,7 +369,8 @@
 .toolbar-search {
   width: 250px;
 }
-.toolbar-search .field-label {
+.toolbar-search span.field-label,
+.toolbar-search .field-label > span {
   display: none;
 }
 .empty-state {
@@ -750,7 +751,8 @@
   top: 100%;
   left: 0;
   right: 0;
-  min-width: 230px;
+  min-width: 0;
+  max-width: 100%;
   background: hsl(var(--popover));
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
@@ -768,6 +770,7 @@
   color: hsl(var(--muted-foreground));
 }
 .combo-search input {
+  min-width: 0;
   width: 100%;
   background: transparent;
   outline: none;
@@ -775,6 +778,7 @@
   font-size: 12px;
 }
 .combo-hint {
+  overflow-wrap: anywhere;
   padding: 8px 12px;
   color: hsl(var(--muted-foreground));
   font-size: 9px;

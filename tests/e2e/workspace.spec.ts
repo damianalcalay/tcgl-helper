@@ -1,9 +1,18 @@
 import { test, expect, Page } from "@playwright/test";
 
 async function choose(page: Page, label: string, option: string) {
-  await page.getByRole("combobox", { name: label, exact: true }).click();
   await page
+    .getByRole("combobox", { name: label, exact: true })
+    .or(page.getByRole("button", { name: label, exact: true }))
+    .click();
+  await page
+    .getByRole("listbox", { name: label, exact: true })
     .getByRole("option")
+    .or(
+      page
+        .getByRole("menu", { name: label, exact: true })
+        .getByRole("menuitemradio"),
+    )
     .filter({ has: page.getByText(option, { exact: true }) })
     .click();
 }
@@ -87,6 +96,8 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await createCard(page, "Test Basic", "Basic");
   await createCard(page, "Test Item", "Item");
   await createCard(page, "Test Evolution", "Stage 1");
+  for (let i = 1; i <= 4; i++)
+    await createCard(page, `Regex fixture ${i}`, "Item");
   await page.getByRole("combobox", { name: "Find a card" }).click();
   await page.getByRole("searchbox").fill("[");
   await expect(page.locator('p[role="alert"]')).toContainText(
@@ -118,8 +129,7 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByLabel("Generated deck overview")).toBeVisible();
   await createDeck(page, "Deck Beta", 1);
-  await page.getByRole("combobox", { name: "Find a deck" }).click();
-  await page.getByRole("option", { name: "Deck Alpha", exact: true }).click();
+  await choose(page, "Find a deck", "Deck Alpha");
   await page.getByRole("button", { name: "Edit deck", exact: true }).click();
   await choose(page, "Related variants", "Deck Beta");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -193,7 +203,7 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
   await page.mouse.click(10, 10);
   await expect(page.getByRole("dialog", { name: "Add a match" })).toBeVisible();
   await expect(
-    page.getByRole("combobox", { name: "Your deck", exact: true }),
+    page.getByRole("button", { name: "Your deck", exact: true }),
   ).toContainText("Deck Alpha");
   await expect(
     page.getByRole("button", { name: "Remove prize 1: Test Basic" }),
@@ -209,13 +219,13 @@ test("collection, regex, per-copy tracking, match forms, statistics and destruct
     .getByRole("button", { name: "Opponent prizes: 3", exact: true })
     .click();
   await page
-    .getByRole("combobox", { name: "Your starter Pokémon", exact: true })
+    .getByRole("button", { name: "Your starter Pokémon", exact: true })
     .click();
   await expect(page.getByRole("option", { name: /Test Item/ })).toHaveCount(0);
   await expect(
     page.getByRole("option", { name: /Test Evolution/ }),
   ).toHaveCount(0);
-  await page.getByRole("option", { name: /^Test Basic/ }).click();
+  await page.getByRole("menuitemradio", { name: /^Test Basic/ }).click();
   await choose(page, "Opponent starter Pokémon", "Test Basic");
   await expect(
     page.getByRole("button", { name: "Add prize: Test Basic", exact: true }),
@@ -447,9 +457,17 @@ test("histories expand independently and paginate the newest games; card edits a
     "15 Jan 2026",
   );
   await history
-    .getByRole("combobox", { name: "Entries per page", exact: true })
+    .getByRole("button", { name: "Entries per page", exact: true })
     .click();
-  await history.getByRole("option", { name: "All", exact: true }).click();
+  await expect(page.getByRole("searchbox")).toHaveCount(0);
+  const overflow = await page.evaluate(() => ({
+    width: window.innerWidth,
+    scroll: document.documentElement.scrollWidth,
+  }));
+  expect(overflow.scroll).toBeLessThanOrEqual(overflow.width);
+  const dropdown = await page.getByRole("menu").boundingBox();
+  expect(dropdown!.x + dropdown!.width).toBeLessThanOrEqual(overflow.width);
+  await page.getByRole("menuitemradio", { name: "All", exact: true }).click();
   await expect(history.locator("tbody tr")).toHaveCount(25);
   await expect(history.locator("tbody tr").last()).toContainText("1 Jan 2026");
   await expect(

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useTheme } from "next-themes";
 import {
   ChevronLeft,
@@ -319,10 +319,13 @@ export function CombatLogView({
   }, [toast, capturing]);
   const image = (name: string) =>
     matchCardImage(data, match, name) ?? art[cardNameKey(name)]?.image;
-  function commit(next: TableState) {
-    setHistory((h) => [...h.slice(0, cursor + 1), next]);
-    setCursor(cursor + 1);
-  }
+  const commit = useCallback(
+    (next: TableState) => {
+      setHistory((h) => [...h.slice(0, cursor + 1), next]);
+      setCursor(cursor + 1);
+    },
+    [cursor],
+  );
   function undo() {
     setCursor((c) => Math.max(0, c - 1));
     setSelected(null);
@@ -337,7 +340,6 @@ export function CombatLogView({
     if (!editing) return;
     const handler = (e: KeyboardEvent) => {
       if (
-        !(e.ctrlKey || e.metaKey) ||
         e.altKey ||
         (e.target as Element).closest(
           "input,textarea,[contenteditable=true],[role=textbox]",
@@ -348,6 +350,16 @@ export function CombatLogView({
       if (!dialogs[dialogs.length - 1]?.classList.contains("study-modal"))
         return;
       const key = e.key.toLowerCase();
+      if ((key === "delete" || key === "backspace") && selectedMark) {
+        e.preventDefault();
+        commit({
+          ...current,
+          marks: current.marks.filter((m) => m.id !== selectedMark),
+        });
+        setSelectedMark(null);
+        return;
+      }
+      if (!(e.ctrlKey || e.metaKey)) return;
       if (key === "z") {
         e.preventDefault();
         setCursor((c) =>
@@ -365,7 +377,7 @@ export function CombatLogView({
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [editing, history.length]);
+  }, [editing, history.length, selectedMark, current, cursor, commit]);
   function leave() {
     setHistory([]);
     setCursor(0);

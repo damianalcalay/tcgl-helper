@@ -279,6 +279,15 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   await page
     .getByRole("button", { name: "Enter damage manually", exact: true })
     .click();
+  const manualBox = await page
+    .getByLabel("Manual damage", { exact: true })
+    .boundingBox();
+  const applyBox = await page
+    .getByRole("button", { name: "Apply", exact: true })
+    .boundingBox();
+  expect(applyBox!.y - manualBox!.y - manualBox!.height).toBeGreaterThanOrEqual(
+    8,
+  );
   await page.getByLabel("Manual damage", { exact: true }).fill("15");
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await expect(page.locator(".table-toolbar").getByRole("alert")).toContainText(
@@ -625,6 +634,16 @@ test("replay inspectors stay stable, prepared editor conserves cards and uses ex
   expect(
     Number(await questionMark.locator("text").getAttribute("font-size")),
   ).toBeGreaterThan(96);
+  await page.keyboard.press("Delete");
+  await expect(page.locator(".table-annotations text")).toHaveCount(0);
+  await expect(page.locator(".table-annotations [data-mark]")).toHaveCount(1);
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".table-annotations text")).toHaveCount(1);
+  await questionMark.locator("text").click();
+  await page.keyboard.press("Backspace");
+  await expect(page.locator(".table-annotations text")).toHaveCount(0);
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".table-annotations text")).toHaveCount(1);
   let dialogs = 0;
   page.on("dialog", async (d) => {
     dialogs++;
@@ -729,6 +748,11 @@ test("deck variants add cards from the full Standard regex catalog without chang
             cards: [
               { id: "sv01-166", name: "Arven", localId: "166" },
               { id: "sv01-175", name: "Iono", localId: "175" },
+              ...Array.from({ length: 5 }, (_, i) => ({
+                id: `sv05-${i + 1}`,
+                name: `Catalog fixture ${i + 1}`,
+                localId: String(i + 1),
+              })),
             ],
           },
     });

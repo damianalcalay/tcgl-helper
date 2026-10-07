@@ -143,6 +143,7 @@ export function PokemonEditor({
       </div>
       {manual && (
         <form
+          className="damage-manual-form"
           onSubmit={(e) => {
             e.preventDefault();
             const n = Number(damage);

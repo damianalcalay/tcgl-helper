@@ -2,13 +2,35 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown, Search, X } from "lucide-react";
+import { ChoiceSelect } from "./choice-select";
 export interface Option {
   value: string;
   label: string;
   description?: string;
   disabled?: boolean;
 }
-export function RegexCombobox({
+type ComboboxProps = {
+  label: string;
+  options: Option[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  clearable?: boolean;
+};
+export function RegexCombobox(props: ComboboxProps) {
+  const numeric = props.options.every(
+    (o) => /^\d+(?:\.\d+)?$/.test(o.value) || o.value.toLowerCase() === "all",
+  );
+  return props.options.length <= 6 || numeric ? (
+    <div className="combobox">
+      <ChoiceSelect {...props} />
+    </div>
+  ) : (
+    <SearchableRegexCombobox {...props} />
+  );
+}
+function SearchableRegexCombobox({
   label,
   options,
   value,

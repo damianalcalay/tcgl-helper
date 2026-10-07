@@ -791,6 +791,14 @@
   align-items: center;
   justify-content: space-between;
 }
+.damage-manual-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.damage-manual-form > button {
+  align-self: flex-start;
+}
 .damage-controls button,
 .attachment-control button {
   width: 28px;
